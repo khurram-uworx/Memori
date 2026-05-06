@@ -1,3 +1,5 @@
+using System.Numerics.Tensors;
+
 namespace Memori.Search;
 
 /// <summary>
@@ -13,23 +15,15 @@ public static class Similarity
         if (left.Length == 0 || left.Length != right.Count)
             return 0;
 
-        double dot = 0;
-        double leftNorm = 0;
-        double rightNorm = 0;
+        // Use TensorPrimitives for optimized cosine similarity
+        if (right is float[] arr)
+            return TensorPrimitives.CosineSimilarity(left, arr);
 
-        for (var i = 0; i < left.Length; i++)
-        {
-            var l = left[i];
-            var r = right[i];
-            dot += l * r;
-            leftNorm += l * l;
-            rightNorm += r * r;
-        }
-
-        if (leftNorm == 0 || rightNorm == 0)
-            return 0;
-
-        return Math.Max(0, dot / (Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm)));
+        // Fallback: copy to array for span access
+        var tmp = new float[right.Count];
+        for (int i = 0; i < right.Count; i++)
+            tmp[i] = right[i];
+        return TensorPrimitives.CosineSimilarity(left, tmp);
     }
 
     /// <summary>

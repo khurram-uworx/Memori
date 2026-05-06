@@ -41,9 +41,35 @@ public sealed class MemoriOptions
     public bool StripSystemMessagesOnCapture { get; set; } = true;
 
     /// <summary>
+    /// Whether empty messages should be omitted from durable conversation capture.
+    /// </summary>
+    public bool DropEmptyMessagesOnCapture { get; set; }
+
+    /// <summary>
+    /// Message roles that should be omitted from durable conversation capture after provider messages are converted.
+    /// </summary>
+    public IList<string> ExcludedCaptureRoles { get; } = [];
+
+    /// <summary>
+    /// Optional predicate that can omit converted conversation messages from durable capture.
+    /// </summary>
+    public Func<ConversationMessage, bool>? CaptureMessageFilter { get; set; }
+
+    /// <summary>
+    /// Optional transform that can redact or replace converted conversation messages before durable capture.
+    /// Return <see langword="null"/> to omit the message.
+    /// </summary>
+    public Func<ConversationMessage, ConversationMessage?>? CaptureMessageTransform { get; set; }
+
+    /// <summary>
     /// Whether recalled fact timestamps should be included in injected prompt context.
     /// </summary>
     public bool IncludeFactTimestampsInPrompt { get; set; } = true;
+
+    /// <summary>
+    /// Whether memory summaries should be included in injected prompt context.
+    /// </summary>
+    public bool IncludeSummariesInPrompt { get; set; } = true;
 
     /// <summary>
     /// XML-like tag name used to delimit injected memory context.
@@ -60,6 +86,48 @@ public sealed class MemoriOptions
     /// Heading used before recalled facts in the injected prompt context.
     /// </summary>
     public string PromptFactsHeading { get; set; } = "Relevant context about the user:";
+
+    /// <summary>
+    /// Heading used before memory summaries in the injected prompt context.
+    /// </summary>
+    public string PromptSummariesHeading { get; set; } = "## Summaries";
+
+    /// <summary>
+    /// Prefix used when rendering each recalled fact line.
+    /// </summary>
+    public string PromptFactBullet { get; set; } = "-";
+
+    /// <summary>
+    /// Prefix used when rendering each memory summary line.
+    /// </summary>
+    public string PromptSummaryBullet { get; set; } = "-";
+
+    /// <summary>
+    /// Timestamp format used for facts and summaries when timestamps are included.
+    /// </summary>
+    public string PromptTimestampFormat { get; set; } = "u";
+
+    /// <summary>
+    /// Whether recalled memory should be injected into chat requests.
+    /// </summary>
+    public bool EnablePromptInjection { get; set; } = true;
+
+    /// <summary>
+    /// Role used for the injected memory context message.
+    /// </summary>
+    public string PromptInjectionRole { get; set; } = "system";
+
+    /// <summary>
+    /// Where recalled memory context should be inserted into chat history.
+    /// </summary>
+    public PromptInjectionPlacement PromptInjectionPlacement { get; set; } =
+        PromptInjectionPlacement.BeforeAllMessages;
+
+    /// <summary>
+    /// Whether recalled memory context should be merged into an existing instruction message.
+    /// </summary>
+    public PromptInjectionMergeStrategy PromptInjectionMergeStrategy { get; set; } =
+        PromptInjectionMergeStrategy.None;
 
     /// <summary>
     /// Validates option values and throws when a value cannot be used safely.
@@ -89,5 +157,33 @@ public sealed class MemoriOptions
         if (string.IsNullOrWhiteSpace(PromptContextTagName))
             throw new InvalidOperationException(
                 $"{nameof(PromptContextTagName)} cannot be empty.");
+
+        if (string.IsNullOrWhiteSpace(PromptFactBullet))
+            throw new InvalidOperationException(
+                $"{nameof(PromptFactBullet)} cannot be empty.");
+
+        if (string.IsNullOrWhiteSpace(PromptSummaryBullet))
+            throw new InvalidOperationException(
+                $"{nameof(PromptSummaryBullet)} cannot be empty.");
+
+        if (string.IsNullOrWhiteSpace(PromptTimestampFormat))
+            throw new InvalidOperationException(
+                $"{nameof(PromptTimestampFormat)} cannot be empty.");
+
+        if (ExcludedCaptureRoles.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException(
+                $"{nameof(ExcludedCaptureRoles)} cannot contain empty roles.");
+
+        if (string.IsNullOrWhiteSpace(PromptInjectionRole))
+            throw new InvalidOperationException(
+                $"{nameof(PromptInjectionRole)} cannot be empty.");
+
+        if (!Enum.IsDefined(PromptInjectionPlacement))
+            throw new InvalidOperationException(
+                $"{nameof(PromptInjectionPlacement)} must be a defined value.");
+
+        if (!Enum.IsDefined(PromptInjectionMergeStrategy))
+            throw new InvalidOperationException(
+                $"{nameof(PromptInjectionMergeStrategy)} must be a defined value.");
     }
 }

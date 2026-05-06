@@ -1,5 +1,6 @@
 using Memori.Abstractions;
 using Memori.Models;
+using Microsoft.Extensions.AI;
 
 namespace Memori.Augmentation;
 
@@ -9,7 +10,7 @@ namespace Memori.Augmentation;
 public sealed class AugmentationService
 {
     readonly IStorage storage;
-    readonly IMemoriEmbeddingGenerator? embeddingGenerator;
+    readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly IAugmentationClient augmentationClient;
     readonly MemoriOptions options;
     readonly object gate = new();
@@ -21,7 +22,7 @@ public sealed class AugmentationService
     public AugmentationService(
         IStorage storage,
         IAugmentationClient augmentationClient,
-        IMemoriEmbeddingGenerator? embeddingGenerator = null,
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
@@ -127,11 +128,11 @@ public sealed class AugmentationService
 
             if (!string.IsNullOrWhiteSpace(fact.Content) && fact.Embedding is null)
             {
-                var embedding = await embeddingGenerator.GenerateEmbeddingAsync(fact.Content, cancellationToken)
+                var embedding = await embeddingGenerator.GenerateAsync(fact.Content, cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
                 output.Add(new NewMemoryFact(
                     fact.Content,
-                    embedding?.ToArray(),
+                    embedding.Vector.ToArray(),
                     fact.Summaries,
                     fact.CreatedAt));
             }

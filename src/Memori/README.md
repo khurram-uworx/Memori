@@ -1,0 +1,146 @@
+# Memori
+
+Durable memory for AI applications built on `Microsoft.Extensions.AI`.
+
+Memori gives your AI app a persistent, searchable memory layer: capture conversations, recall relevant facts, and inject context into prompts — without coupling your code to a specific database or LLM provider.
+
+## Installation
+
+```bash
+dotnet add package Memori
+```
+
+## What You Get
+
+- A pluggable `IStorage` abstraction — bring your own backend (PostgreSQL, SQL Server, Redis, etc.)
+- Built-in `InMemoryStorage` for tests, demos, and local development
+- `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
+- A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
+- `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
+
+## Basic Example
+
+```csharp
+using Memori.Embeddings;
+using Memori.Models;
+using Memori.Search;
+using Memori.Storage;
+
+var storage = new InMemoryStorage();
+var embeddings = new DeterministicEmbeddingGenerator();
+
+var entityId = await storage.GetOrCreateEntityAsync("user_123");
+var factEmbedding = await embeddings.GenerateEmbeddingAsync(
+    "The user's favorite color is blue");
+
+await storage.AddFactsAsync(
+    entityId,
+    new[]
+    {
+        new NewMemoryFact(
+            "The user's favorite color is blue",
+            factEmbedding)
+    });
+
+var search = new MemorySearchService(
+    storage,
+    embeddings,
+    new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+
+var results = await search.RecallAsync(entityId, "What is my favorite color?");
+Console.WriteLine(search.FormatPromptContext(results));
+```
+
+## Facade Usage
+
+```csharp
+using Memori.Augmentation;
+using Memori.Models;
+using Memori.Storage;
+
+var memori = new Memori.Memori(
+    new InMemoryStorage(),
+    new MemoriOptions { StripSystemMessagesOnCapture = true },
+    augmentationClient: new NullAugmentationClient());
+
+memori.Attribution("user_123", "support_agent");
+memori.SetSession("session_abc");
+
+await memori.CaptureAsync(new[]
+{
+    new ConversationMessage(ConversationRoles.User, "My favorite color is blue."),
+    new ConversationMessage(ConversationRoles.Assistant, "Noted.")
+});
+
+var recalled = await memori.RecallAsync("What is my favorite color?");
+await memori.WaitForAugmentationAsync();
+
+var promptContext = memori.BuildPromptContext(recalled);
+Console.WriteLine(promptContext.RenderedText);
+```
+
+## Microsoft.Extensions.AI Middleware
+
+```csharp
+using Memori;
+using Microsoft.Extensions.AI;
+
+IChatClient innerClient = /* your provider-backed IChatClient */;
+
+IChatClient client = new ChatClientBuilder(innerClient)
+    .UseMemori(memori)
+    .Build(serviceProvider);
+```
+
+Recalled memory is injected as a `system` message before the existing chat history by default. Injection placement and role are configurable.
+
+## Dependency Injection
+
+```csharp
+services.AddMemori(options =>
+{
+    options.SessionTimeout = TimeSpan.FromMinutes(30);
+    options.PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemAndDeveloperMessages;
+});
+
+var memori = serviceProvider.CreateMemori();
+```
+
+Bind from configuration:
+
+```csharp
+services.AddMemori(configuration.GetSection("Memori"));
+```
+
+Supply custom storage, embedding, and augmentation through factories:
+
+```csharp
+services.AddMemori(
+    sp => sp.GetRequiredService<IStorage>(),
+    sp => sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
+    sp => sp.GetRequiredService<IAugmentationClient>(),
+    options => { options.RecallRelevanceThreshold = 0.2; });
+```
+
+## Augmentation
+
+Augmentation extracts structured memory (facts, semantic triples, process attributes, summaries) from captured conversations in the background.
+
+- `NullAugmentationClient`: no-op, for hosts that only want capture/recall.
+- `PromptAugmentationClient`: uses an `IChatClient` to extract structured JSON output.
+- Implement `IAugmentationClient` for custom extraction logic.
+
+## Learn More
+
+- Overview and full feature surface: [README.md](https://github.com/MemoriLabs/Memori/blob/main/README.md)
+- Developer guide: [GETTING-STARTED.md](https://github.com/MemoriLabs/Memori/blob/main/GETTING-STARTED.md)
+- Architecture and design notes: [ARCHITECTURE.md](https://github.com/MemoriLabs/Memori/blob/main/ARCHITECTURE.md)
+- Repository: [github.com/MemoriLabs/Memori](https://github.com/MemoriLabs/Memori)
+
+## Status
+
+Early development. Core memory primitives, `IChatClient` middleware, and NUnit tests are implemented. No first-party database integrations are included in this package — implement `IStorage` in your own package and pass it to Memori.
+
+## License
+
+Apache-2.0

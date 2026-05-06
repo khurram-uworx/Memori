@@ -1,4 +1,5 @@
-using Memori.Abstractions;
+using Microsoft.Extensions.AI;
+using System.Numerics.Tensors;
 
 namespace Memori.Embeddings;
 
@@ -9,7 +10,7 @@ namespace Memori.Embeddings;
 /// This implementation is not a semantic embedding model. It hashes tokens into a
 /// fixed-size vector so recall paths can be exercised without a production model.
 /// </remarks>
-public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
+public sealed class DeterministicEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {
     /// <summary>
     /// Default vector size used by the deterministic generator.
@@ -58,18 +59,13 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
 
     static void normalize(float[] vector)
     {
-        double norm = 0;
-
-        foreach (var value in vector)
-            norm += value * value;
-
+        // Use TensorPrimitives for optimized L2 normalization
+        var sumSquares = TensorPrimitives.SumOfSquares(vector);
+        var norm = (float)Math.Sqrt(sumSquares);
         if (norm == 0)
             return;
-
-        var scale = 1 / Math.Sqrt(norm);
-
-        for (var i = 0; i < vector.Length; i++)
-            vector[i] = (float)(vector[i] * scale);
+        var scale = 1f / norm;
+        TensorPrimitives.Multiply(vector, scale, vector);
     }
 
     readonly int dimensions;
@@ -104,29 +100,24 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
     }
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlyList<float>?> GenerateEmbeddingAsync(string text,
+    public void Dispose()
+    { }
+
+    public object? GetService(Type serviceType, object? serviceKey = null)
+        => null;
+
+    public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
+        IEnumerable<string> values,
+        EmbeddingGenerationOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(values);
 
-        return ValueTask.FromResult<IReadOnlyList<float>?>(generate(text, cancellationToken));
-    }
+        var embeddings = values
+            .Select(value => new Embedding<float>(generate(value ?? string.Empty, cancellationToken)))
+            .ToArray();
 
-    /// <inheritdoc />
-    public ValueTask<IReadOnlyList<IReadOnlyList<float>?>> GenerateEmbeddingsAsync(IReadOnlyList<string> texts,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(texts);
-
-        var embeddings = new IReadOnlyList<float>?[texts.Count];
-        for (var i = 0; i < texts.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            embeddings[i] = generate(texts[i] ?? string.Empty, cancellationToken);
-        }
-
-        return ValueTask.FromResult<IReadOnlyList<IReadOnlyList<float>?>>(embeddings);
+        return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
     }
 }

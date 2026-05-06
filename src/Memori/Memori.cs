@@ -2,6 +2,7 @@ using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Search;
+using Microsoft.Extensions.AI;
 
 namespace Memori;
 
@@ -19,6 +20,36 @@ public sealed class Memori
     Attribution? attribution;
     string? sessionId;
 
+    internal MemoriOptions Options => options;
+
+    /// <summary>
+    /// Gets the current attribution context, if one has been configured.
+    /// </summary>
+    public Attribution? CurrentAttribution
+    {
+        get
+        {
+            lock (gate)
+            {
+                return attribution;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the active session identifier, if one has been configured.
+    /// </summary>
+    public string? CurrentSessionId
+    {
+        get
+        {
+            lock (gate)
+            {
+                return sessionId;
+            }
+        }
+    }
+
     /// <summary>
     /// Creates a new Memori facade.
     /// </summary>
@@ -27,7 +58,7 @@ public sealed class Memori
         MemoriOptions? options = null,
         string? sessionId = null,
         IAugmentationClient? augmentationClient = null,
-        IMemoriEmbeddingGenerator? embeddingGenerator = null)
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
     {
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         this.options = options ?? new MemoriOptions();
@@ -78,6 +109,37 @@ public sealed class Memori
         lock (gate)
         {
             this.sessionId = sessionId;
+        }
+    }
+
+    /// <summary>
+    /// Resumes an externally managed session identifier.
+    /// </summary>
+    /// <remarks>
+    /// This only changes conversation grouping for capture/history. Recall and memory deletion remain scoped
+    /// to the current attribution entity.
+    /// </remarks>
+    public void ResumeSession(string sessionId) => SetSession(sessionId);
+
+    /// <summary>
+    /// Clears the current attribution context.
+    /// </summary>
+    public void ClearAttribution()
+    {
+        lock (gate)
+        {
+            attribution = null;
+        }
+    }
+
+    /// <summary>
+    /// Clears the active session identifier.
+    /// </summary>
+    public void ClearSession()
+    {
+        lock (gate)
+        {
+            sessionId = null;
         }
     }
 
@@ -180,6 +242,18 @@ public sealed class Memori
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Formats recalled memories into prompt context using the configured options.
+    /// </summary>
+    public string FormatPromptContext(IReadOnlyList<RecallResult> results)
+        => memorySearchService.FormatPromptContext(results);
+
+    /// <summary>
+    /// Builds structured prompt context using the configured options.
+    /// </summary>
+    public PromptContext BuildPromptContext(IReadOnlyList<RecallResult> results)
+        => memorySearchService.BuildPromptContext(results);
 
     /// <summary>
     /// Deletes durable memories for the current attribution context.
