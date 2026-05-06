@@ -5,16 +5,24 @@ namespace Memori.Models;
 /// </summary>
 public sealed record SemanticTriple
 {
+    static string requireNonEmpty(string value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Value cannot be empty.", paramName);
+
+        return value;
+    }
+
     /// <summary>
     /// Creates a semantic triple.
     /// </summary>
     public SemanticTriple(string subjectName, string subjectType, string predicate, string objectName, string objectType)
     {
-        SubjectName = RequireNonEmpty(subjectName, nameof(subjectName));
-        SubjectType = RequireNonEmpty(subjectType, nameof(subjectType));
-        Predicate = RequireNonEmpty(predicate, nameof(predicate));
-        ObjectName = RequireNonEmpty(objectName, nameof(objectName));
-        ObjectType = RequireNonEmpty(objectType, nameof(objectType));
+        SubjectName = requireNonEmpty(subjectName, nameof(subjectName));
+        SubjectType = requireNonEmpty(subjectType, nameof(subjectType));
+        Predicate = requireNonEmpty(predicate, nameof(predicate));
+        ObjectName = requireNonEmpty(objectName, nameof(objectName));
+        ObjectType = requireNonEmpty(objectType, nameof(objectType));
     }
 
     /// <summary>
@@ -46,12 +54,4 @@ public sealed record SemanticTriple
     /// Converts the triple into a fact-like sentence for recall.
     /// </summary>
     public string ToFactText() => $"{SubjectName} {Predicate} {ObjectName}";
-
-    private static string RequireNonEmpty(string value, string paramName)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Value cannot be empty.", paramName);
-
-        return value;
-    }
 }

@@ -1,5 +1,6 @@
 using Memori.Abstractions;
 using Memori.Models;
+using Microsoft.Extensions.AI;
 using System.Globalization;
 using System.Text;
 
@@ -22,20 +23,23 @@ public sealed class MemorySearchService
         => $". Stated at {createdAt.ToString("u", CultureInfo.InvariantCulture).TrimEnd('Z')}";
 
     readonly IStorage storage;
-    readonly IMemoriEmbeddingGenerator? embeddingGenerator;
+    readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly MemoriOptions options;
+    readonly IMemoryRanker ranker;
 
     /// <summary>
     /// Creates a memory search service.
     /// </summary>
     public MemorySearchService(IStorage storage,
-        IMemoriEmbeddingGenerator? embeddingGenerator = null,
-        MemoriOptions? options = null)
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
+        MemoriOptions? options = null,
+        IMemoryRanker? ranker = null)
     {
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         this.embeddingGenerator = embeddingGenerator;
         this.options = options ?? new MemoriOptions();
         this.options.Validate();
+        this.ranker = ranker ?? new DefaultMemoryRanker();
     }
 
     async ValueTask<float[]?> generateQueryEmbeddingAsync(string query, CancellationToken cancellationToken)
@@ -43,16 +47,16 @@ public sealed class MemorySearchService
         if (embeddingGenerator is null)
             return null;
 
-        var embedding = await embeddingGenerator.GenerateEmbeddingAsync(query, cancellationToken)
+        var embedding = await embeddingGenerator.GenerateAsync(query, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
-        return embedding?.ToArray();
+        return embedding.Vector.ToArray();
     }
 
     IEnumerable<RecallResult> normalize(IReadOnlyList<RecallResult> results)
         => results
         .Where(result => !string.IsNullOrWhiteSpace(result.Content))
-        .OrderByDescending(result => scoreForThreshold(result))
+        .OrderByDescending(result => ranker.Rank(result, DateTimeOffset.UtcNow))
         .ThenByDescending(result => result.CreatedAt);
 
     bool isRelevant(RecallResult result)
@@ -172,6 +176,7 @@ public sealed class MemorySearchService
         }
 
         builder.Append("</").Append(tagName).Append('>');
+
         return builder.ToString();
     }
 }

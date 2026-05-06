@@ -63,6 +63,15 @@ public sealed class InMemoryStorage : IStorage
     readonly Dictionary<string, ProcessState> processes = new(StringComparer.Ordinal);
     readonly Dictionary<string, SessionState> sessions = new(StringComparer.Ordinal);
     readonly Dictionary<string, ConversationState> conversations = new(StringComparer.Ordinal);
+    readonly IMemoryRanker ranker;
+
+    /// <summary>
+    /// Creates a new in-memory storage instance.
+    /// </summary>
+    public InMemoryStorage(IMemoryRanker? ranker = null)
+    {
+        this.ranker = ranker ?? new DefaultMemoryRanker();
+    }
 
     ConversationState getConversationState(string conversationId)
     {
@@ -254,7 +263,9 @@ public sealed class InMemoryStorage : IStorage
                     createdAt: fact.CreatedAt ?? DateTimeOffset.UtcNow,
                     embedding: fact.Embedding?.ToArray(),
                     conversationId: conversationId,
-                    summaries: fact.Summaries.ToArray());
+                    summaries: fact.Summaries.ToArray(),
+                    confidence: fact.Confidence,
+                    memoryType: fact.MemoryType);
 
                 entity.Facts.Add(memoryFact);
                 stored.Add(memoryFact);
@@ -293,17 +304,20 @@ public sealed class InMemoryStorage : IStorage
                     var hasDenseSignal = queryEmbedding.HasValue && fact.Embedding is not null;
                     var lexicalScore = Similarity.LexicalScore(query, fact.Content);
                     var rankScore = Similarity.RankScore(similarity, lexicalScore, hasDenseSignal);
-
-                    return new RecallResult(
+                    var result = new RecallResult(
                         fact.Id,
                         fact.Content,
                         similarity,
                         rankScore,
                         fact.CreatedAt,
-                        fact.Summaries);
+                        fact.Summaries,
+                        fact.Confidence,
+                        fact.MemoryType);
+
+                    return result;
                 })
                 .Where(result => result.RankScore > 0)
-                .OrderByDescending(result => result.RankScore)
+                .OrderByDescending(result => ranker.Rank(result, DateTimeOffset.UtcNow))
                 .ThenByDescending(result => result.CreatedAt)
                 .Take(limit)
                 .ToArray();

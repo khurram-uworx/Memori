@@ -32,10 +32,12 @@ Completed:
 
 - .NET 10 SDK or newer.
 
-## Build
+## Build and Test
 
 ```bash
-dotnet build src/Memori/Memori.csproj
+dotnet restore
+dotnet build --configuration Release
+dotnet test --configuration Release --verbosity normal
 ```
 
 ## Current Low-Level Usage
@@ -125,7 +127,7 @@ Relevant context about the user:
 Memori ships a chat pipeline wrapper that recalls before a model call and captures after it completes.
 
 ```csharp
-using Memori.MicrosoftExtensionsAI;
+using Memori;
 using Microsoft.Extensions.AI;
 
 IChatClient innerClient = /* your provider-backed IChatClient */;
@@ -140,13 +142,15 @@ Provider-specific integrations are intentionally out of scope. Any provider that
 For dependency injection:
 
 ```csharp
-using Memori.MicrosoftExtensionsAI;
+using Memori;
 
 services.AddMemori(options =>
 {
     options.SessionTimeout = TimeSpan.FromMinutes(30);
 });
 ```
+
+You can also register custom storage, embedding, or augmentation implementations via the `AddMemori(...)` overloads.
 
 ## Storage Model
 
@@ -169,15 +173,24 @@ The library does not expose SQL commands, migrations, connections, transaction h
 
 ## Embeddings
 
-Memori exposes `IMemoriEmbeddingGenerator`, a small abstraction that returns `float` vectors or `null`.
+Memori relies directly on `Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>>`.
 
-Included implementations:
+Included implementation:
 
 - `DeterministicEmbeddingGenerator`: dependency-free vectors for tests and local demos.
-- `NullEmbeddingGenerator`: lexical-only mode.
-- `MicrosoftEmbeddingGeneratorAdapter`: adapts `Microsoft.Extensions.AI.IEmbeddingGenerator<string, Embedding<float>>`.
+
+To run lexical-only recall, omit embedding generator registration.
 
 Production embedding providers should be supplied by the consuming application.
+
+## Augmentation
+
+Memori includes:
+
+- `NullAugmentationClient`: no-op augmentation for hosts that only want capture/recall plumbing.
+- `PromptAugmentationClient`: built-in prompt-based extraction client that uses an `IChatClient` and expects JSON output for facts, semantic triples, process attributes, and optional conversation summaries.
+
+Hosts can also implement `IAugmentationClient` to use custom extraction logic.
 
 ## Repository Layout
 
@@ -199,3 +212,7 @@ src/
 ## License
 
 Apache-2.0
+
+## Contributor Notes
+
+- See `AGENTS.md` for project-specific implementation and review guardrails for future agent-assisted changes.

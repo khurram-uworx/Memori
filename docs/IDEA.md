@@ -177,6 +177,31 @@ services.AddChatClient(...)
 
 ---
 
+## Phase 1 Scope
+
+This library is Phase 1 of Memori for .NET, focused on **primitives and infrastructure** for durable memory in AI applications.
+
+### Included in Phase 1
+
+- Attribution, sessions, and conversation lifecycle management.
+- Capture and recall primitives.
+- Storage abstraction and in-memory reference implementation.
+- Embedding abstraction with Microsoft.Extensions.AI adapter.
+- Augmentation boundary and built-in extraction support.
+- `IChatClient` middleware for recall and capture.
+- Request-scoped control over recall and capture behavior.
+- Streaming support with proper cancellation semantics.
+
+### Explicitly Not Included in Phase 1
+
+- **Advanced summarization**: The library does not automatically generate conversation or fact summaries. Summaries are stored primitives that can be extracted by augmentation clients.
+- **Graph reasoning**: Semantic triples are stored primitives, not used for knowledge graph construction or reasoning.
+- **Conflict resolution**: Handling contradictory or versioned memories is deferred.
+- **Vector database integrations**: No first-party integrations for Pinecone, Weaviate, or other vector DBs. Implement `IStorage` for custom backends.
+- **Provider-specific LLM wrappers**: All provider integration happens through `Microsoft.Extensions.AI.IChatClient`.
+- **Enterprise features**: Multi-tenancy, access control, audit logging, and encryption are the responsibility of consuming applications and storage implementations.
+
+
 ## Non-Goals (Phase 1)
 
 * Large-scale distributed vector search

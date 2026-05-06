@@ -2,6 +2,7 @@ using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Search;
+using Microsoft.Extensions.AI;
 
 namespace Memori;
 
@@ -27,7 +28,7 @@ public sealed class Memori
         MemoriOptions? options = null,
         string? sessionId = null,
         IAugmentationClient? augmentationClient = null,
-        IMemoriEmbeddingGenerator? embeddingGenerator = null)
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
     {
         this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
         this.options = options ?? new MemoriOptions();
@@ -180,6 +181,12 @@ public sealed class Memori
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Formats recalled memories into prompt context using the configured options.
+    /// </summary>
+    public string FormatPromptContext(IReadOnlyList<RecallResult> results)
+        => memorySearchService.FormatPromptContext(results);
 
     /// <summary>
     /// Deletes durable memories for the current attribution context.
