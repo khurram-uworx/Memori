@@ -73,9 +73,7 @@ public sealed class Memori
     public void SetSession(string sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId))
-        {
             throw new ArgumentException("Value cannot be empty.", nameof(sessionId));
-        }
 
         lock (gate)
         {
@@ -94,10 +92,9 @@ public sealed class Memori
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+
         if (messages.Count == 0)
-        {
             return;
-        }
 
         Attribution? currentAttribution;
         string? currentSessionId;
@@ -108,9 +105,7 @@ public sealed class Memori
         }
 
         if (currentAttribution is null)
-        {
             return;
-        }
 
         currentSessionId ??= NewSession();
 
@@ -133,10 +128,9 @@ public sealed class Memori
             .ConfigureAwait(false);
 
         var capturedMessages = normalizeMessages(messages, options.StripSystemMessagesOnCapture);
+
         if (capturedMessages.Count == 0)
-        {
             return;
-        }
 
         await storage.AppendMessagesAsync(conversation.Id, capturedMessages, cancellationToken)
             .ConfigureAwait(false);
@@ -177,9 +171,7 @@ public sealed class Memori
         }
 
         if (currentAttribution is null)
-        {
             return Array.Empty<RecallResult>();
-        }
 
         return await memorySearchService.RecallAsync(
                 currentAttribution.EntityId,
@@ -201,12 +193,11 @@ public sealed class Memori
         }
 
         if (currentAttribution is null)
-        {
             return;
-        }
 
         var entityId = await storage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
             .ConfigureAwait(false);
+
         await storage.DeleteEntityMemoriesAsync(entityId, cancellationToken).ConfigureAwait(false);
     }
 
@@ -215,18 +206,13 @@ public sealed class Memori
         bool stripSystemMessages)
     {
         if (!stripSystemMessages)
-        {
             return messages;
-        }
 
         var filtered = new List<ConversationMessage>(messages.Count);
+
         foreach (var message in messages)
-        {
             if (!string.Equals(message.Role, ConversationRoles.System, StringComparison.OrdinalIgnoreCase))
-            {
                 filtered.Add(message);
-            }
-        }
 
         return filtered;
     }

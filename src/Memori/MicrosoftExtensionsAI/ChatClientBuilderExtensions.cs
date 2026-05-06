@@ -10,7 +10,7 @@ public static class ChatClientBuilderExtensions
     /// <summary>
     /// Adds Memori middleware to a chat client pipeline.
     /// </summary>
-    public static ChatClientBuilder UseMemori(this ChatClientBuilder builder, global::Memori.Memori memori)
+    public static ChatClientBuilder UseMemori(this ChatClientBuilder builder, Memori memori)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(memori);

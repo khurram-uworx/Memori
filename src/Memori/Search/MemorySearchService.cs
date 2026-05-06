@@ -45,6 +45,7 @@ public sealed class MemorySearchService
 
         var embedding = await embeddingGenerator.GenerateEmbeddingAsync(query, cancellationToken)
             .ConfigureAwait(false);
+
         return embedding?.ToArray();
     }
 
@@ -69,10 +70,9 @@ public sealed class MemorySearchService
         ArgumentNullException.ThrowIfNull(query);
 
         var resolvedLimit = limit ?? options.RecallFactsLimit;
+
         if (resolvedLimit <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be greater than zero.");
-        }
 
         var queryEmbedding = await generateQueryEmbeddingAsync(query, cancellationToken)
             .ConfigureAwait(false);
@@ -102,9 +102,7 @@ public sealed class MemorySearchService
         foreach (var result in results)
         {
             if (string.IsNullOrWhiteSpace(result.Content))
-            {
                 continue;
-            }
 
             var suffix = options.IncludeFactTimestampsInPrompt
                 ? formatTimestampSuffix(result.CreatedAt)
@@ -128,24 +126,16 @@ public sealed class MemorySearchService
         foreach (var summary in results.SelectMany(result => result.Summaries))
         {
             if (string.IsNullOrWhiteSpace(summary.Content))
-            {
                 continue;
-            }
 
             var key = summary.Content.Trim();
             if (!seen.Add(key))
-            {
                 continue;
-            }
 
             if (options.IncludeFactTimestampsInPrompt)
-            {
                 lines.Add($"- [{summary.CreatedAt.ToString("u", CultureInfo.InvariantCulture).TrimEnd('Z')}] {summary.Content}");
-            }
             else
-            {
                 lines.Add($"- {summary.Content}");
-            }
         }
 
         return lines;
@@ -158,10 +148,9 @@ public sealed class MemorySearchService
     {
         ArgumentNullException.ThrowIfNull(results);
         var factLines = FormatFactLines(results);
+
         if (factLines.Count == 0)
-        {
             return string.Empty;
-        }
 
         var summaries = FormatSummaryLines(results);
         var tagName = options.PromptContextTagName.Trim();
@@ -169,19 +158,17 @@ public sealed class MemorySearchService
         builder.Append('<').Append(tagName).AppendLine(">");
         builder.AppendLine(options.PromptContextInstruction);
         builder.AppendLine(options.PromptFactsHeading);
+
         foreach (var line in factLines)
-        {
             builder.AppendLine(line);
-        }
 
         if (summaries.Count > 0)
         {
             builder.AppendLine();
             builder.AppendLine("## Summaries");
+
             foreach (var line in summaries)
-            {
                 builder.AppendLine(line);
-            }
         }
 
         builder.Append("</").Append(tagName).Append('>');

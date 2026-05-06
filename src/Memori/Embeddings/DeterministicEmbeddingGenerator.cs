@@ -25,22 +25,16 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
             if (i < text.Length && char.IsLetterOrDigit(text[i]))
             {
                 if (start < 0)
-                {
                     start = i;
-                }
 
                 continue;
             }
 
             if (start < 0)
-            {
                 continue;
-            }
 
             if (i - start > 1)
-            {
                 yield return text[start..i].ToUpperInvariant();
-            }
 
             start = -1;
         }
@@ -52,6 +46,7 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
         const uint prime = 16777619;
 
         var hash = offset;
+
         foreach (var c in value)
         {
             hash ^= c;
@@ -64,21 +59,17 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
     static void normalize(float[] vector)
     {
         double norm = 0;
+
         foreach (var value in vector)
-        {
             norm += value * value;
-        }
 
         if (norm == 0)
-        {
             return;
-        }
 
         var scale = 1 / Math.Sqrt(norm);
+
         for (var i = 0; i < vector.Length; i++)
-        {
             vector[i] = (float)(vector[i] * scale);
-        }
     }
 
     readonly int dimensions;
@@ -90,9 +81,7 @@ public sealed class DeterministicEmbeddingGenerator : IMemoriEmbeddingGenerator
     public DeterministicEmbeddingGenerator(int dimensions = DefaultDimensions)
     {
         if (dimensions <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(dimensions), "Dimensions must be greater than zero.");
-        }
 
         this.dimensions = dimensions;
     }

@@ -37,15 +37,12 @@ public sealed class AugmentationService
     public ValueTask EnqueueAsync(AugmentationInput input, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
+
         if (!options.EnableAugmentation)
-        {
             return ValueTask.CompletedTask;
-        }
 
         if (!options.RunAugmentationInBackground)
-        {
             return RunAugmentationAsync(input, cancellationToken);
-        }
 
         var task = RunAugmentationAsync(input, cancellationToken).AsTask();
         lock (gate)
@@ -77,9 +74,7 @@ public sealed class AugmentationService
         }
 
         if (tasks.Length == 0)
-        {
             return;
-        }
 
         await Task.WhenAll(tasks).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -87,10 +82,9 @@ public sealed class AugmentationService
     async ValueTask RunAugmentationAsync(AugmentationInput input, CancellationToken cancellationToken)
     {
         var result = await augmentationClient.AugmentAsync(input, cancellationToken).ConfigureAwait(false);
+
         if (result is null)
-        {
             return;
-        }
 
         if (!string.IsNullOrWhiteSpace(result.ConversationSummary))
         {
@@ -104,24 +98,19 @@ public sealed class AugmentationService
         if (result.Facts is { Count: > 0 })
         {
             var facts = await maybeEmbedFactsAsync(result.Facts, cancellationToken).ConfigureAwait(false);
+
             if (facts.Count > 0)
-            {
                 await storage.AddFactsAsync(input.EntityId, facts, input.ConversationId, cancellationToken)
                     .ConfigureAwait(false);
-            }
         }
 
         if (result.SemanticTriples is { Count: > 0 })
-        {
             await storage.AddSemanticTriplesAsync(input.EntityId, result.SemanticTriples, cancellationToken)
                 .ConfigureAwait(false);
-        }
 
         if (!string.IsNullOrWhiteSpace(input.ProcessId) && result.ProcessAttributes is { Count: > 0 })
-        {
             await storage.AddProcessAttributesAsync(input.ProcessId, result.ProcessAttributes, cancellationToken)
                 .ConfigureAwait(false);
-        }
     }
 
     async ValueTask<IReadOnlyList<NewMemoryFact>> maybeEmbedFactsAsync(
@@ -129,14 +118,13 @@ public sealed class AugmentationService
         CancellationToken cancellationToken)
     {
         if (embeddingGenerator is null)
-        {
             return facts;
-        }
 
         var output = new List<NewMemoryFact>(facts.Count);
         foreach (var fact in facts)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             if (!string.IsNullOrWhiteSpace(fact.Content) && fact.Embedding is null)
             {
                 var embedding = await embeddingGenerator.GenerateEmbeddingAsync(fact.Content, cancellationToken)
@@ -148,9 +136,7 @@ public sealed class AugmentationService
                     fact.CreatedAt));
             }
             else
-            {
                 output.Add(fact);
-            }
         }
 
         return output;

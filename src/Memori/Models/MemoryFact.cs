@@ -60,9 +60,7 @@ public sealed record MemoryFact
     private static string RequireNonEmpty(string value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value))
-        {
             throw new ArgumentException("Value cannot be empty.", paramName);
-        }
 
         return value;
     }

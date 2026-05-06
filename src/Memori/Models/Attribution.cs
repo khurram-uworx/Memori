@@ -9,16 +9,12 @@ public sealed record Attribution
     internal static string ValidateRequiredIdentifier(string value, string paramName)
     {
         if (string.IsNullOrWhiteSpace(value))
-        {
             throw new ArgumentException("Identifier cannot be empty.", paramName);
-        }
 
         if (value.Length > MaxIdentifierLength)
-        {
             throw new ArgumentException(
                 $"Identifier cannot be greater than {MaxIdentifierLength} characters.",
                 paramName);
-        }
 
         return value;
     }
@@ -26,9 +22,7 @@ public sealed record Attribution
     internal static string? ValidateOptionalIdentifier(string? value, string paramName)
     {
         if (value is null)
-        {
             return null;
-        }
 
         return ValidateRequiredIdentifier(value, paramName);
     }

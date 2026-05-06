@@ -1,6 +1,6 @@
 # Memori for .NET
 
-Memori for .NET is a .NET 10 library for adding durable memory to AI applications.
+Memori for .NET is a library for adding durable memory to AI applications.
 
 This repository is currently migrating the core Memori library surface to C# with a narrow scope:
 
@@ -13,7 +13,7 @@ If you want PostgreSQL, SQL Server, Cosmos DB, MongoDB, SQLite, Redis, or anothe
 
 ## Status
 
-This .NET port is in active migration. The core library skeleton and lower-level memory primitives are in place; the high-level `Memori` facade and `IChatClient` middleware are still upcoming.
+This .NET port now includes the core memory primitives, the `Memori` facade, NUnit tests, and Microsoft.Extensions.AI middleware.
 
 Completed:
 
@@ -23,26 +23,14 @@ Completed:
 - Thread-safe `InMemoryStorage`.
 - Embedding abstraction with Microsoft.Extensions.AI adapter.
 - Recall/search service with cosine, lexical, relevance filtering, and prompt formatting.
-
-Upcoming:
-
-- Conversation capture service.
+- Conversation capture facade.
 - Augmentation boundary.
-- `Memori` facade.
-- Microsoft.Extensions.AI `IChatClient` integration.
-- Tests and usage documentation.
-
-See [src/Plan.md](src/Plan.md) for the migration plan.
+- Microsoft.Extensions.AI `IChatClient` middleware.
+- NUnit test project under `src/Memori.Tests`.
 
 ## Requirements
 
 - .NET 10 SDK or newer.
-
-The project currently targets:
-
-```xml
-<TargetFramework>net10.0</TargetFramework>
-```
 
 ## Build
 
@@ -92,6 +80,36 @@ var promptContext = search.FormatPromptContext(results);
 Console.WriteLine(promptContext);
 ```
 
+## Facade Usage
+
+Use `Memori` when you want attribution, session tracking, capture, recall, and optional augmentation in one place.
+
+```csharp
+using Memori.Augmentation;
+using Memori.Models;
+using Memori.Storage;
+
+var memori = new Memori.Memori(
+    new InMemoryStorage(),
+    new MemoriOptions
+    {
+        StripSystemMessagesOnCapture = true
+    },
+    augmentationClient: new NullAugmentationClient());
+
+memori.Attribution("user_123", "support_agent");
+memori.SetSession("session_abc");
+
+await memori.CaptureAsync(new[]
+{
+    new ConversationMessage(ConversationRoles.User, "My favorite color is blue."),
+    new ConversationMessage(ConversationRoles.Assistant, "Noted.")
+});
+
+var recalled = await memori.RecallAsync("What is my favorite color?");
+await memori.WaitForAugmentationAsync();
+```
+
 Example prompt context:
 
 ```text
@@ -102,27 +120,33 @@ Relevant context about the user:
 </memori_context>
 ```
 
-## Intended Microsoft.Extensions.AI Shape
+## Microsoft.Extensions.AI Integration
 
-The planned high-level API is an `IChatClient` wrapper that recalls before a model call and captures after it completes.
-
-Planned usage shape:
+Memori ships a chat pipeline wrapper that recalls before a model call and captures after it completes.
 
 ```csharp
+using Memori.MicrosoftExtensionsAI;
 using Microsoft.Extensions.AI;
 
 IChatClient innerClient = /* your provider-backed IChatClient */;
 
 IChatClient client = new ChatClientBuilder(innerClient)
-    .UseMemori(options =>
-    {
-        options.EntityId = "user_123";
-        options.ProcessId = "support_agent";
-    })
-    .Build();
+    .UseMemori(memori)
+    .Build(serviceProvider);
 ```
 
 Provider-specific integrations are intentionally out of scope. Any provider that exposes or can be adapted to `IChatClient` should work through the same Memori middleware.
+
+For dependency injection:
+
+```csharp
+using Memori.MicrosoftExtensionsAI;
+
+services.AddMemori(options =>
+{
+    options.SessionTimeout = TimeSpan.FromMinutes(30);
+});
+```
 
 ## Storage Model
 
@@ -159,14 +183,17 @@ Production embedding providers should be supplied by the consuming application.
 
 ```text
 src/
-  Plan.md
   Memori/
     Abstractions/
     Embeddings/
+    Augmentation/
     Models/
+    MicrosoftExtensionsAI/
     Search/
     Storage/
     Memori.csproj
+  Memori.Tests/
+    Memori.Tests.csproj
 ```
 
 ## License

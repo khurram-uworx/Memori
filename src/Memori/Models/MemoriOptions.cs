@@ -67,39 +67,27 @@ public sealed class MemoriOptions
     public void Validate()
     {
         if (RecallFactsLimit <= 0)
-        {
             throw new InvalidOperationException(
                 $"{nameof(RecallFactsLimit)} must be greater than zero.");
-        }
 
         if (RecallCandidateLimit <= 0)
-        {
             throw new InvalidOperationException(
                 $"{nameof(RecallCandidateLimit)} must be greater than zero.");
-        }
 
         if (RecallCandidateLimit < RecallFactsLimit)
-        {
             throw new InvalidOperationException(
                 $"{nameof(RecallCandidateLimit)} cannot be less than {nameof(RecallFactsLimit)}.");
-        }
 
         if (RecallRelevanceThreshold is < 0 or > 1)
-        {
             throw new InvalidOperationException(
                 $"{nameof(RecallRelevanceThreshold)} must be between 0 and 1.");
-        }
 
         if (SessionTimeout <= TimeSpan.Zero)
-        {
             throw new InvalidOperationException(
                 $"{nameof(SessionTimeout)} must be greater than zero.");
-        }
 
         if (string.IsNullOrWhiteSpace(PromptContextTagName))
-        {
             throw new InvalidOperationException(
                 $"{nameof(PromptContextTagName)} cannot be empty.");
-        }
     }
 }

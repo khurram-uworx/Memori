@@ -29,6 +29,7 @@ public sealed class MicrosoftEmbeddingGeneratorAdapter : IMemoriEmbeddingGenerat
 
         var embedding = await inner.GenerateAsync(text, options, cancellationToken)
             .ConfigureAwait(false);
+
         return embedding.Vector.ToArray();
     }
 
@@ -42,10 +43,9 @@ public sealed class MicrosoftEmbeddingGeneratorAdapter : IMemoriEmbeddingGenerat
             .ConfigureAwait(false);
 
         var vectors = new IReadOnlyList<float>?[embeddings.Count];
+
         for (var i = 0; i < embeddings.Count; i++)
-        {
             vectors[i] = embeddings[i].Vector.ToArray();
-        }
 
         return vectors;
     }

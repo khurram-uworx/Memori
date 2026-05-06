@@ -10,12 +10,12 @@ namespace Memori.MicrosoftExtensionsAI;
 /// </summary>
 public sealed class MemoriChatClient : DelegatingChatClient
 {
-    readonly global::Memori.Memori memori;
+    readonly Memori memori;
 
     /// <summary>
     /// Creates a new Memori chat client wrapper.
     /// </summary>
-    public MemoriChatClient(IChatClient innerClient, global::Memori.Memori memori)
+    public MemoriChatClient(IChatClient innerClient, Memori memori)
         : base(innerClient)
     {
         this.memori = memori ?? throw new ArgumentNullException(nameof(memori));
@@ -61,21 +61,20 @@ public sealed class MemoriChatClient : DelegatingChatClient
 
         var input = messages.ToArray();
         var query = extractLatestUserText(input);
+
         if (string.IsNullOrWhiteSpace(query))
-        {
             return input;
-        }
 
         var recalled = await memori.RecallAsync(query, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         if (recalled.Count == 0)
-        {
             return input;
-        }
 
         var context = memoriSearchContext(recalled);
         var prepared = new List<ChatMessage>(input.Length + 1);
         prepared.AddRange(input);
         prepared.Insert(0, new ChatMessage(ChatRole.System, context));
+
         return prepared;
     }
 
@@ -85,9 +84,7 @@ public sealed class MemoriChatClient : DelegatingChatClient
         {
             var message = messages[i];
             if (message.Role == ChatRole.User && !string.IsNullOrWhiteSpace(message.Text))
-            {
                 return message.Text!;
-            }
         }
 
         return string.Empty;
@@ -98,15 +95,15 @@ public sealed class MemoriChatClient : DelegatingChatClient
         var builder = new StringBuilder();
         builder.AppendLine("<memori_context>");
         builder.AppendLine("Relevant context about the user:");
+
         foreach (var result in results)
         {
             if (!string.IsNullOrWhiteSpace(result.Content))
-            {
                 builder.Append("- ").AppendLine(result.Content);
-            }
         }
 
         builder.Append("</memori_context>");
+
         return builder.ToString();
     }
 
@@ -127,16 +124,12 @@ public sealed class MemoriChatClient : DelegatingChatClient
         CancellationToken cancellationToken)
     {
         if (updates.Count == 0)
-        {
             return;
-        }
 
         var messages = new List<ChatMessage>();
         ChatResponseExtensions.AddMessages(messages, updates);
         if (messages.Count == 0)
-        {
             return;
-        }
 
         var captured = new List<ConversationMessage>(inputMessages.Count + messages.Count);
         captured.AddRange(inputMessages.Select(toConversationMessage));

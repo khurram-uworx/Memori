@@ -1,5 +1,6 @@
 using Memori.Abstractions;
 using Memori.Augmentation;
+using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddMemori(
         this IServiceCollection services,
-        Action<global::Memori.Models.MemoriOptions>? configureOptions = null)
+        Action<MemoriOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -24,20 +25,18 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton(sp =>
             {
-                var options = new global::Memori.Models.MemoriOptions();
+                var options = new MemoriOptions();
                 configureOptions(options);
                 options.Validate();
                 return options;
             });
         }
         else
-        {
-            services.AddSingleton(new global::Memori.Models.MemoriOptions());
-        }
+            services.AddSingleton(new MemoriOptions());
 
         services.AddSingleton<IStorage, InMemoryStorage>();
         services.AddSingleton<IAugmentationClient, NullAugmentationClient>();
-        services.AddSingleton<global::Memori.Memori>();
+        services.AddSingleton<Memori>();
         services.AddSingleton<MemorySearchService>();
 
         return services;

@@ -82,9 +82,7 @@ public sealed class InMemoryStorage : IStorage
         lock (gate)
         {
             if (!entities.ContainsKey(id))
-            {
                 entities[id] = new EntityState(id);
-            }
 
             return ValueTask.FromResult(id);
         }
@@ -100,9 +98,7 @@ public sealed class InMemoryStorage : IStorage
         lock (gate)
         {
             if (!processes.ContainsKey(id))
-            {
                 processes[id] = new ProcessState(id);
-            }
 
             return ValueTask.FromResult(id);
         }
@@ -140,9 +136,7 @@ public sealed class InMemoryStorage : IStorage
         var id = requireNonEmpty(sessionId, nameof(sessionId));
 
         if (timeout <= TimeSpan.Zero)
-        {
             throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be greater than zero.");
-        }
 
         lock (gate)
         {
@@ -154,12 +148,12 @@ public sealed class InMemoryStorage : IStorage
 
             var now = DateTimeOffset.UtcNow;
             var lastConversationId = session.ConversationIds.LastOrDefault();
+
             if (lastConversationId is not null &&
                 conversations.TryGetValue(lastConversationId, out var lastConversation) &&
                 now - lastConversation.Model.UpdatedAt <= timeout)
-            {
+
                 return ValueTask.FromResult(lastConversation.Model);
-            }
 
             var conversationId = newId("conversation");
             var conversation = new Conversation(
@@ -247,6 +241,7 @@ public sealed class InMemoryStorage : IStorage
             }
 
             var stored = new List<MemoryFact>(facts.Count);
+
             foreach (var fact in facts)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -278,21 +273,15 @@ public sealed class InMemoryStorage : IStorage
         var id = Attribution.ValidateRequiredIdentifier(entityId, nameof(entityId));
 
         if (limit <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be greater than zero.");
-        }
 
         if (candidateLimit <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(candidateLimit), "Candidate limit must be greater than zero.");
-        }
 
         lock (gate)
         {
             if (!entities.TryGetValue(id, out var entity) || entity.Facts.Count == 0)
-            {
                 return ValueTask.FromResult<IReadOnlyList<RecallResult>>(Array.Empty<RecallResult>());
-            }
 
             var candidates = entity.Facts
                 .Take(candidateLimit)
@@ -383,10 +372,9 @@ public sealed class InMemoryStorage : IStorage
             foreach (var attribute in attributes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 if (!string.IsNullOrWhiteSpace(attribute))
-                {
                     process.Attributes.Add(attribute);
-                }
             }
         }
 

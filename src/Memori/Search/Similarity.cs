@@ -11,9 +11,7 @@ public static class Similarity
     public static double Cosine(ReadOnlySpan<float> left, IReadOnlyList<float> right)
     {
         if (left.Length == 0 || left.Length != right.Count)
-        {
             return 0;
-        }
 
         double dot = 0;
         double leftNorm = 0;
@@ -29,9 +27,7 @@ public static class Similarity
         }
 
         if (leftNorm == 0 || rightNorm == 0)
-        {
             return 0;
-        }
 
         return Math.Max(0, dot / (Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm)));
     }
@@ -42,16 +38,14 @@ public static class Similarity
     public static double LexicalScore(string query, string content)
     {
         var queryTerms = Tokenize(query);
+
         if (queryTerms.Count == 0)
-        {
             return 0;
-        }
 
         var contentTerms = Tokenize(content);
+
         if (contentTerms.Count == 0)
-        {
             return 0;
-        }
 
         var overlap = queryTerms.Count(contentTerms.Contains);
         return (double)overlap / queryTerms.Count;
@@ -80,23 +74,18 @@ public static class Similarity
             if (i < text.Length && char.IsLetterOrDigit(text[i]))
             {
                 if (start < 0)
-                {
                     start = i;
-                }
 
                 continue;
             }
 
             if (start < 0)
-            {
                 continue;
-            }
 
             var token = text[start..i];
+
             if (token.Length > 1)
-            {
                 terms.Add(token);
-            }
 
             start = -1;
         }
