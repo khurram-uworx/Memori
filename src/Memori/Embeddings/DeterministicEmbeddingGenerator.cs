@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using System.Numerics.Tensors;
 
 namespace Memori.Embeddings;
 
@@ -59,12 +60,12 @@ public sealed class DeterministicEmbeddingGenerator : IEmbeddingGenerator<string
     static void normalize(float[] vector)
     {
         // Use TensorPrimitives for optimized L2 normalization
-        var sumSquares = System.Numerics.Tensors.TensorPrimitives.SumOfSquares(vector);
+        var sumSquares = TensorPrimitives.SumOfSquares(vector);
         var norm = (float)Math.Sqrt(sumSquares);
         if (norm == 0)
             return;
         var scale = 1f / norm;
-        System.Numerics.Tensors.TensorPrimitives.Multiply(vector, scale, vector);
+        TensorPrimitives.Multiply(vector, scale, vector);
     }
 
     readonly int dimensions;

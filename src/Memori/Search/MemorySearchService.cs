@@ -19,6 +19,36 @@ public sealed class MemorySearchService
         return result.Similarity > 0 ? result.Similarity : 0;
     }
 
+    static string renderPromptContext(
+        IReadOnlyList<PromptContextFact> facts,
+        IReadOnlyList<PromptContextSummary> summaries,
+        PromptContextMetadata metadata)
+    {
+        if (facts.Count == 0)
+            return string.Empty;
+
+        var builder = new StringBuilder();
+        builder.Append('<').Append(metadata.TagName).AppendLine(">");
+        builder.AppendLine(metadata.Instruction);
+        builder.AppendLine(metadata.FactsHeading);
+
+        foreach (var fact in facts)
+            builder.AppendLine(fact.RenderedText);
+
+        if (summaries.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine(metadata.SummariesHeading);
+
+            foreach (var summary in summaries)
+                builder.AppendLine(summary.RenderedText);
+        }
+
+        builder.Append("</").Append(metadata.TagName).Append('>');
+
+        return builder.ToString();
+    }
+
     readonly IStorage storage;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly MemoriOptions options;
@@ -223,35 +253,5 @@ public sealed class MemorySearchService
     {
         ArgumentNullException.ThrowIfNull(results);
         return BuildPromptContext(results).RenderedText;
-    }
-
-    static string renderPromptContext(
-        IReadOnlyList<PromptContextFact> facts,
-        IReadOnlyList<PromptContextSummary> summaries,
-        PromptContextMetadata metadata)
-    {
-        if (facts.Count == 0)
-            return string.Empty;
-
-        var builder = new StringBuilder();
-        builder.Append('<').Append(metadata.TagName).AppendLine(">");
-        builder.AppendLine(metadata.Instruction);
-        builder.AppendLine(metadata.FactsHeading);
-
-        foreach (var fact in facts)
-            builder.AppendLine(fact.RenderedText);
-
-        if (summaries.Count > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine(metadata.SummariesHeading);
-
-            foreach (var summary in summaries)
-                builder.AppendLine(summary.RenderedText);
-        }
-
-        builder.Append("</").Append(metadata.TagName).Append('>');
-
-        return builder.ToString();
     }
 }

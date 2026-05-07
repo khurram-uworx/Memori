@@ -6,8 +6,7 @@ This document captures Phase 2 work for the Memori .NET library, as defined in `
 
 Phase 2 focuses on **advanced features and integrations** beyond the Phase 1 primitives:
 
-* Microsoft Vector Data Extensions integration
-* External vector database providers
+* Vector database integration via Microsoft Vector Data Extensions
 * Distributed retrieval/ranking
 * Workspace/team/shared memory scopes
 * Conflict resolution/versioning
@@ -16,129 +15,124 @@ Phase 2 focuses on **advanced features and integrations** beyond the Phase 1 pri
 
 ---
 
-## Phase 2 Implementation Tasks
+## Architectural Direction
 
-### 1. Microsoft Vector Data Extensions integration
+### The Core Decision
 
-**Phase 2 item from IDEA.md:** Microsoft Vector Data Extensions integration
+Phase 1 shipped with `IStorage` as a single abstraction covering two fundamentally different concerns:
 
-What to add:
-- Adapter for Microsoft Vector Data Extensions as an alternative to direct `IEmbeddingGenerator` usage.
-- Integration helpers for hosts using Microsoft's vector data abstractions.
-- Examples showing how to use Microsoft Vector Data Extensions with Memori.
+1. **Vector memory** — facts, semantic triples, process attributes. These are semantically searched, ranked by similarity, and benefit from vector database backends.
+2. **Conversation storage** — entities, processes, sessions, conversations, messages. These are relational and ordered; they do not benefit from vector search.
 
-Task breakdown:
-- Add a new package or module for Microsoft Vector Data Extensions support.
-- Create adapter implementations for common vector data operations.
-- Add tests that verify the adapter works with the core `IStorage` contract.
+Bundling both into `IStorage` meant any production vector database integration required an adapter layer that translated Memori's domain operations into VectorStore operations — unnecessary complexity that would have to be repeated for every provider.
 
-### 2. External vector database providers
+**Phase 2 splits `IStorage` into two focused abstractions:**
 
-**Phase 2 item from IDEA.md:** External vector database providers
+- **`IConversationStorage`** — the relational/ordered half. Manages entities, processes, sessions, conversations, and messages. Small surface, easy to implement, ships with an `InMemoryConversationStorage` default.
+- **`VectorStoreCollection<string, MemoryFactRecord>`** — the vector half. Provided directly by `Microsoft.Extensions.VectorData`, configured by the user in their DI container. Memori consumes it directly, the same way it already consumes `IEmbeddingGenerator`.
 
-What to add:
-- Reference implementations for popular vector databases (Pinecone, Weaviate, Milvus, etc.).
-- These should be in separate packages, not in the core Memori library.
-- Clear examples and documentation for implementing custom `IStorage` for other backends.
+### Why This Is Better Than an Adapter Layer
 
-Task breakdown:
-- Create separate NuGet packages for each vector database provider.
-- Each package implements `IStorage` with provider-specific optimizations.
-- Add integration tests for each provider.
-- Document the expected behavior and performance characteristics.
+The original Phase 2 plan proposed building a `VectorStoreStorageAdapter` that bridged `IStorage` to `VectorStore`. That approach had two problems:
 
-### 3. Distributed retrieval/ranking
+1. It required Memori to maintain adapter code for every provider, even though `Microsoft.Extensions.VectorData` already provides a standard interface that providers implement.
+2. It forced users to learn a Memori-specific storage abstraction when the ecosystem already has a well-supported one.
 
-**Phase 2 item from IDEA.md:** Distributed retrieval/ranking
+The new approach mirrors how `IEmbeddingGenerator` works: Memori declares a dependency on a standard MEAI-family abstraction, and users configure whatever provider they want in their DI container. Every current and future `VectorStore` provider works automatically.
 
-What to add:
-- Support for ranking memory candidates across multiple storage backends.
-- Distributed ranking strategies that combine results from multiple sources.
-- Load balancing and failover for distributed memory retrieval.
+### Memory Record as a First-Class VectorStore Type
 
-Task breakdown:
-- Add a distributed ranker abstraction that extends `IMemoryRanker`.
-- Implement a composite storage adapter that queries multiple backends.
-- Add tests for distributed ranking with multiple storage sources.
-- Document consistency and ordering guarantees.
+`MemoryFactRecord` is defined with `Microsoft.Extensions.VectorData` attributes directly. No mapping, no conversion, no adapter record type. The record is the VectorStore record.
 
-### 4. Workspace/team/shared memory scopes
+```csharp
+public sealed class MemoryFactRecord
+{
+    [VectorStoreKey]
+    public string Id { get; set; }
 
-**Phase 2 item from IDEA.md:** Workspace/team/shared memory scopes
+    [VectorStoreData(IsFilterable = true)]
+    public string EntityId { get; set; }
 
-What to add:
-- Support for shared memory contexts across multiple users or teams.
-- Scope management for workspace-level vs. user-level memories.
-- Access control patterns for shared memory.
+    [VectorStoreData(IsFullTextSearchable = true)]
+    public string Content { get; set; }
 
-Task breakdown:
-- Extend `IStorage` with scope/workspace identifiers.
-- Add scope-aware recall and capture methods.
-- Add tests for scope isolation and shared memory retrieval.
-- Document scope semantics and access patterns.
+    [VectorStoreVector(Dimensions = 1536)]
+    public ReadOnlyMemory<float> Embedding { get; set; }
 
-### 5. Conflict resolution/versioning
+    [VectorStoreData(IsFilterable = true)]
+    public string MemoryType { get; set; }
 
-**Phase 2 item from IDEA.md:** Conflict resolution/versioning
+    [VectorStoreData(IsFilterable = true)]
+    public double Confidence { get; set; }
 
-What to add:
-- Support for versioning memory records when conflicts arise.
-- Conflict detection and resolution strategies.
-- Audit trails for memory changes.
+    [VectorStoreData(IsFilterable = true)]
+    public DateTimeOffset CreatedAt { get; set; }
 
-Task breakdown:
-- Add versioning fields to memory record models.
-- Implement conflict detection in storage implementations.
-- Add resolution strategies (last-write-wins, merge, manual review).
-- Add tests for conflict scenarios and resolution.
+    [VectorStoreData]
+    public string? ConversationId { get; set; }
+}
+```
 
-### 6. Summarized thread memory
+### DI Registration Pattern
 
-**Phase 2 item from IDEA.md:** Summarized thread memory
+```csharp
+// Dev / test — zero config, everything in-memory
+services.AddMemori();
 
-What to add:
-- Automatic or semi-automatic summarization of conversation threads.
-- Storage and retrieval of thread summaries.
-- Integration with augmentation pipeline for summary generation.
+// Production with Azure AI Search
+services.AddAzureAISearch(endpoint, credential);
+services.AddMemori(options => { ... });
 
-Task breakdown:
-- Add a thread summarization abstraction.
-- Implement a reference summarizer using `IChatClient`.
-- Add storage support for thread summaries.
-- Add tests for summary generation and retrieval.
+// Production with Qdrant
+services.AddQdrantVectorStore("localhost");
+services.AddMemori();
+```
 
-### 7. User memory management APIs/UI
-
-**Phase 2 item from IDEA.md:** User memory management APIs/UI
-
-What to add:
-- APIs for users to inspect, edit, and delete their stored memories.
-- Optional UI components for memory management.
-- Privacy and consent controls.
-
-Task breakdown:
-- Add memory inspection and management APIs to `Memori`.
-- Add filtering and search capabilities for user memories.
-- Add deletion and editing endpoints.
-- Add tests for memory management operations.
-- Document privacy and consent patterns.
+Memori resolves `VectorStoreCollection<string, MemoryFactRecord>` from DI. The user configures the provider. No Memori-specific adapter packages needed.
 
 ---
 
-## Suggested Implementation Order
+## Phase 2 Implementation Tiers
 
-1. **Microsoft Vector Data Extensions integration** - Foundation for Phase 2 vector work.
-2. **External vector database providers** - Enables production deployments.
-3. **Distributed retrieval/ranking** - Supports larger-scale applications.
-4. **Workspace/team/shared memory scopes** - Enables multi-user scenarios.
-5. **Conflict resolution/versioning** - Ensures data consistency.
-6. **Summarized thread memory** - Improves memory quality over time.
-7. **User memory management APIs/UI** - Completes the user-facing experience.
+### Tier 1: Foundation (VectorStore Integration)
+
+Replaces `IStorage` with the split abstraction. This is the prerequisite for everything else.
+
+1. Define `MemoryFactRecord` as a VectorStore record type
+2. Define `IConversationStorage` (relational/ordered operations only)
+3. Ship `InMemoryConversationStorage` as the default implementation
+4. Update `Memori` facade, `AugmentationService`, and `MemorySearchService` to use the new split
+5. Update DI registration to resolve `VectorStoreCollection<string, MemoryFactRecord>` from the container
+6. Update all tests to wire up the in-memory VectorStore provider
+7. Update public documentation
+
+### Tier 2: Production Scale
+
+Builds on Tier 1. Enables multi-backend and distributed scenarios.
+
+8. Distributed retrieval/ranking across multiple VectorStore backends
+9. Composite storage for multi-backend querying with result merging
+
+### Tier 3: Enterprise and Advanced Features
+
+Builds on Tier 2. Enables organizational and long-running memory scenarios.
+
+10. Workspace/team/shared memory scopes
+11. Conflict resolution and versioning for memory records
+12. Summarized thread memory
+13. User memory management APIs/UI
+
+---
+
+## What This Is Not
+
+- **Not replacing VectorStore** — Memori composes with it, not over it.
+- **Not shipping database drivers** — providers like Azure AI Search, Qdrant, and Postgres pgvector ship their own `VectorStore` implementations. Memori does not wrap them.
+- **Not an embedding library** — `IEmbeddingGenerator` from MEAI handles embeddings, same as Phase 1.
+- **Not adding enterprise features in Tier 1** — distributed retrieval, conflict resolution, and multi-tenancy are Tier 2 and Tier 3 items.
 
 ---
 
 ## Related Documents
 
-- `docs/IDEA.md` - Original Phase 1 and Phase 2 design proposal.
-- `docs/FOLLOWUP.md` - Phase 1 ergonomics and polish items discovered during implementation.
-- `docs/NEXT.md` - Additional follow-up work and future considerations.
+- `docs/IDEA.md` — Original Phase 1 and Phase 2 design proposal.
