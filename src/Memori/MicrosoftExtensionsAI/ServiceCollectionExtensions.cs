@@ -1,3 +1,4 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
@@ -51,11 +52,18 @@ public static class ServiceCollectionExtensions
 
     static IServiceCollection addCoreServices(IServiceCollection services)
     {
-        services.TryAddSingleton<IStorage, InMemoryStorage>();
+        services.TryAddSingleton<IConversationStorage, InMemoryConversationStorage>();
         services.TryAddSingleton<IAugmentationClient, NullAugmentationClient>();
         services.TryAddSingleton<MemorySearchService>();
+        services.TryAddSingleton(sp =>
+        {
+            var vectorStore = new InMemoryVectorStore();
+            var collection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+            return collection;
+        });
         services.TryAddSingleton(sp => new Memori(
-            sp.GetRequiredService<IStorage>(),
+            sp.GetRequiredService<IConversationStorage>(),
+            sp.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>(),
             sp.GetRequiredService<MemoriOptions>(),
             augmentationClient: sp.GetRequiredService<IAugmentationClient>(),
             embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>()));
@@ -90,36 +98,39 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers Memori services with a custom storage factory.
+    /// Registers Memori services with a custom conversation storage factory.
     /// </summary>
     public static IServiceCollection AddMemori(
         this IServiceCollection services,
-        Func<IServiceProvider, IStorage> storageFactory,
+        Func<IServiceProvider, IConversationStorage> conversationStorageFactory,
         Action<MemoriOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(storageFactory);
+        ArgumentNullException.ThrowIfNull(conversationStorageFactory);
 
         addOptions(services, configureOptions);
-        services.AddSingleton(sp => storageFactory(sp));
+        services.AddSingleton(sp => conversationStorageFactory(sp));
         return addCoreServices(services);
     }
 
     /// <summary>
-    /// Registers Memori services with explicit storage and embedding implementations.
+    /// Registers Memori services with explicit conversation storage and VectorStore implementations.
     /// </summary>
     public static IServiceCollection AddMemori(
         this IServiceCollection services,
-        IStorage storage,
+        IConversationStorage conversationStorage,
+        VectorStoreCollection<string, MemoryFactRecord> factCollection,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         IAugmentationClient? augmentationClient = null,
         Action<MemoriOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(storage);
+        ArgumentNullException.ThrowIfNull(conversationStorage);
+        ArgumentNullException.ThrowIfNull(factCollection);
 
         addOptions(services, configureOptions);
-        services.AddSingleton(storage);
+        services.AddSingleton(conversationStorage);
+        services.AddSingleton(factCollection);
 
         if (embeddingGenerator is not null)
             services.AddSingleton(embeddingGenerator);
@@ -137,16 +148,20 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddMemori(
         this IServiceCollection services,
-        Func<IServiceProvider, IStorage> storageFactory,
+        Func<IServiceProvider, IConversationStorage> conversationStorageFactory,
+        Func<IServiceProvider, VectorStoreCollection<string, MemoryFactRecord>>? factCollectionFactory,
         Func<IServiceProvider, IEmbeddingGenerator<string, Embedding<float>>>? embeddingGeneratorFactory,
         Func<IServiceProvider, IAugmentationClient>? augmentationClientFactory,
         Action<MemoriOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(storageFactory);
+        ArgumentNullException.ThrowIfNull(conversationStorageFactory);
 
         addOptions(services, configureOptions);
-        services.AddSingleton(sp => storageFactory(sp));
+        services.AddSingleton(sp => conversationStorageFactory(sp));
+
+        if (factCollectionFactory is not null)
+            services.AddSingleton(sp => factCollectionFactory(sp));
 
         if (embeddingGeneratorFactory is not null)
             services.AddSingleton(sp => embeddingGeneratorFactory(sp));

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
@@ -11,7 +12,8 @@ namespace Memori;
 /// </summary>
 public sealed class Memori
 {
-    readonly IStorage storage;
+    readonly IConversationStorage conversationStorage;
+    readonly VectorStoreCollection<string, MemoryFactRecord> factCollection;
     readonly MemoriOptions options;
     readonly MemorySearchService memorySearchService;
     readonly AugmentationService? augmentationService;
@@ -54,20 +56,22 @@ public sealed class Memori
     /// Creates a new Memori facade.
     /// </summary>
     public Memori(
-        IStorage storage,
+        IConversationStorage conversationStorage,
+        VectorStoreCollection<string, MemoryFactRecord> factCollection,
         MemoriOptions? options = null,
         string? sessionId = null,
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
     {
-        this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
+        this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
         this.options = options ?? new MemoriOptions();
         this.options.Validate();
-        memorySearchService = new MemorySearchService(storage, embeddingGenerator, this.options);
+        memorySearchService = new MemorySearchService(factCollection, embeddingGenerator, this.options);
         this.sessionId = sessionId;
         augmentationService = augmentationClient is null
             ? null
-            : new AugmentationService(storage, augmentationClient, embeddingGenerator, this.options);
+            : new AugmentationService(conversationStorage, factCollection, augmentationClient, embeddingGenerator, this.options);
     }
 
     /// <summary>
@@ -171,19 +175,19 @@ public sealed class Memori
 
         currentSessionId ??= NewSession();
 
-        var entityId = await storage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
+        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
             .ConfigureAwait(false);
         var processId = currentAttribution.ProcessId is null
             ? null
-            : await storage.GetOrCreateProcessAsync(currentAttribution.ProcessId, cancellationToken)
+            : await conversationStorage.GetOrCreateProcessAsync(currentAttribution.ProcessId, cancellationToken)
                 .ConfigureAwait(false);
-        var resolvedSessionId = await storage.GetOrCreateSessionAsync(
+        var resolvedSessionId = await conversationStorage.GetOrCreateSessionAsync(
                 currentSessionId,
                 entityId,
                 processId,
                 cancellationToken)
             .ConfigureAwait(false);
-        var conversation = await storage.GetOrCreateConversationAsync(
+        var conversation = await conversationStorage.GetOrCreateConversationAsync(
                 resolvedSessionId,
                 options.SessionTimeout,
                 cancellationToken)
@@ -194,7 +198,7 @@ public sealed class Memori
         if (capturedMessages.Count == 0)
             return;
 
-        await storage.AppendMessagesAsync(conversation.Id, capturedMessages, cancellationToken)
+        await conversationStorage.AppendMessagesAsync(conversation.Id, capturedMessages, cancellationToken)
             .ConfigureAwait(false);
 
         if (augmentationService is not null)
@@ -269,10 +273,27 @@ public sealed class Memori
         if (currentAttribution is null)
             return;
 
-        var entityId = await storage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
+        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
             .ConfigureAwait(false);
 
-        await storage.DeleteEntityMemoriesAsync(entityId, cancellationToken).ConfigureAwait(false);
+        // Search for all facts for this entity and delete them by key
+        var searchOptions = new VectorSearchOptions<MemoryFactRecord>
+        {
+            Filter = r => r.EntityId == entityId
+        };
+
+        var searchResults = factCollection.SearchAsync(new ReadOnlyMemory<float>(new float[1536]), 1000, searchOptions, cancellationToken);
+
+        var keysToDelete = new List<string>();
+        await foreach (var result in searchResults)
+        {
+            keysToDelete.Add(result.Record.Id);
+        }
+
+        if (keysToDelete.Count > 0)
+        {
+            await factCollection.DeleteAsync(keysToDelete, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     static IReadOnlyList<ConversationMessage> normalizeMessages(

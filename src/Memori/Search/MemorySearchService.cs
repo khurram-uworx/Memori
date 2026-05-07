@@ -1,3 +1,4 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Microsoft.Extensions.AI;
@@ -7,7 +8,7 @@ using System.Text;
 namespace Memori.Search;
 
 /// <summary>
-/// Coordinates memory recall across embeddings, storage search, relevance filtering, and prompt formatting.
+/// Coordinates memory recall across embeddings, VectorStore search, relevance filtering, and prompt formatting.
 /// </summary>
 public sealed class MemorySearchService
 {
@@ -49,7 +50,7 @@ public sealed class MemorySearchService
         return builder.ToString();
     }
 
-    readonly IStorage storage;
+    readonly VectorStoreCollection<string, MemoryFactRecord> factCollection;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly MemoriOptions options;
     readonly IMemoryRanker ranker;
@@ -57,12 +58,13 @@ public sealed class MemorySearchService
     /// <summary>
     /// Creates a memory search service.
     /// </summary>
-    public MemorySearchService(IStorage storage,
+    public MemorySearchService(
+        VectorStoreCollection<string, MemoryFactRecord> factCollection,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null,
         IMemoryRanker? ranker = null)
     {
-        this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
         this.embeddingGenerator = embeddingGenerator;
         this.options = options ?? new MemoriOptions();
         this.options.Validate();
@@ -129,19 +131,70 @@ public sealed class MemorySearchService
 
         var queryEmbedding = await generateQueryEmbeddingAsync(query, cancellationToken)
             .ConfigureAwait(false);
-        var results = await storage.SearchFactsAsync(
-                entityId,
-                query,
-                queryEmbedding is null ? null : new ReadOnlyMemory<float>(queryEmbedding),
-                resolvedLimit,
-                Math.Max(options.RecallCandidateLimit, resolvedLimit),
-                cancellationToken)
-            .ConfigureAwait(false);
 
-        return normalize(results)
-            .Where(isRelevant)
-            .Take(resolvedLimit)
-            .ToArray();
+        if (queryEmbedding is not null)
+        {
+            // Vector search path
+            var searchOptions = new VectorSearchOptions<MemoryFactRecord>
+            {
+                Filter = r => r.EntityId == entityId
+            };
+
+            var searchResults = factCollection.SearchAsync(new ReadOnlyMemory<float>(queryEmbedding), Math.Max(options.RecallCandidateLimit, resolvedLimit), searchOptions, cancellationToken);
+
+            var results = new List<RecallResult>();
+            await foreach (var result in searchResults)
+            {
+                var recallResult = new RecallResult(
+                    factId: result.Record.Id,
+                    content: result.Record.Content,
+                    similarity: result.Score ?? 0,
+                    rankScore: result.Score ?? 0,
+                    createdAt: result.Record.CreatedAt,
+                    summaries: result.Record.Summaries,
+                    confidence: (double)result.Record.Confidence,
+                    memoryType: result.Record.MemoryType);
+
+                results.Add(recallResult);
+            }
+
+            return normalize(results)
+                .Where(isRelevant)
+                .Take(resolvedLimit)
+                .ToArray();
+        }
+        else
+        {
+            // Lexical fallback path - get all facts for entity and do local scoring
+            var searchOptions = new VectorSearchOptions<MemoryFactRecord>
+            {
+                Filter = r => r.EntityId == entityId
+            };
+
+            var searchResults = factCollection.SearchAsync(query, Math.Max(options.RecallCandidateLimit, resolvedLimit), searchOptions, cancellationToken);
+
+            var results = new List<RecallResult>();
+            await foreach (var result in searchResults)
+            {
+                var lexicalScore = Similarity.LexicalScore(query, result.Record.Content);
+                var recallResult = new RecallResult(
+                    factId: result.Record.Id,
+                    content: result.Record.Content,
+                    similarity: 0,
+                    rankScore: lexicalScore,
+                    createdAt: result.Record.CreatedAt,
+                    summaries: result.Record.Summaries,
+                    confidence: (double)result.Record.Confidence,
+                    memoryType: result.Record.MemoryType);
+
+                results.Add(recallResult);
+            }
+
+            return normalize(results)
+                .Where(isRelevant)
+                .Take(resolvedLimit)
+                .ToArray();
+        }
     }
 
     /// <summary>

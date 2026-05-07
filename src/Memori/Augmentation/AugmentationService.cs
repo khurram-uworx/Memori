@@ -1,3 +1,4 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Microsoft.Extensions.AI;
@@ -9,7 +10,8 @@ namespace Memori.Augmentation;
 /// </summary>
 public sealed class AugmentationService
 {
-    readonly IStorage storage;
+    readonly IConversationStorage conversationStorage;
+    readonly VectorStoreCollection<string, MemoryFactRecord> factCollection;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly IAugmentationClient augmentationClient;
     readonly MemoriOptions options;
@@ -20,12 +22,14 @@ public sealed class AugmentationService
     /// Creates a new augmentation service.
     /// </summary>
     public AugmentationService(
-        IStorage storage,
+        IConversationStorage conversationStorage,
+        VectorStoreCollection<string, MemoryFactRecord> factCollection,
         IAugmentationClient augmentationClient,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
-        this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
+        this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
         this.augmentationClient = augmentationClient ?? throw new ArgumentNullException(nameof(augmentationClient));
         this.embeddingGenerator = embeddingGenerator;
         this.options = options ?? new MemoriOptions();
@@ -89,7 +93,7 @@ public sealed class AugmentationService
 
         if (!string.IsNullOrWhiteSpace(result.ConversationSummary))
         {
-            await storage.UpdateConversationSummaryAsync(
+            await conversationStorage.UpdateConversationSummaryAsync(
                     input.ConversationId,
                     result.ConversationSummary!,
                     cancellationToken)
@@ -101,17 +105,14 @@ public sealed class AugmentationService
             var facts = await maybeEmbedFactsAsync(result.Facts, cancellationToken).ConfigureAwait(false);
 
             if (facts.Count > 0)
-                await storage.AddFactsAsync(input.EntityId, facts, input.ConversationId, cancellationToken)
-                    .ConfigureAwait(false);
+                await upsertFactsAsync(input.EntityId, facts, input.ConversationId, cancellationToken).ConfigureAwait(false);
         }
 
         if (result.SemanticTriples is { Count: > 0 })
-            await storage.AddSemanticTriplesAsync(input.EntityId, result.SemanticTriples, cancellationToken)
-                .ConfigureAwait(false);
+            await upsertTriplesAsync(input.EntityId, result.SemanticTriples, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(input.ProcessId) && result.ProcessAttributes is { Count: > 0 })
-            await storage.AddProcessAttributesAsync(input.ProcessId, result.ProcessAttributes, cancellationToken)
-                .ConfigureAwait(false);
+            await upsertAttributesAsync(input.ProcessId, result.ProcessAttributes, cancellationToken).ConfigureAwait(false);
     }
 
     async ValueTask<IReadOnlyList<NewMemoryFact>> maybeEmbedFactsAsync(
@@ -141,5 +142,103 @@ public sealed class AugmentationService
         }
 
         return output;
+    }
+
+    async ValueTask upsertFactsAsync(
+        string entityId,
+        IReadOnlyList<NewMemoryFact> facts,
+        string? conversationId,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<MemoryFactRecord>(facts.Count);
+        foreach (var fact in facts)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var record = new MemoryFactRecord
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                EntityId = entityId,
+                Content = fact.Content,
+                Embedding = fact.Embedding is not null ? new ReadOnlyMemory<float>(fact.Embedding.ToArray()) : ReadOnlyMemory<float>.Empty,
+                MemoryType = fact.MemoryType,
+                Confidence = fact.Confidence,
+                CreatedAt = fact.CreatedAt ?? DateTimeOffset.UtcNow,
+                ConversationId = conversationId,
+                Summaries = fact.Summaries.ToArray()
+            };
+
+            records.Add(record);
+        }
+
+        foreach (var record in records)
+        {
+            await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    async ValueTask upsertTriplesAsync(
+        string entityId,
+        IReadOnlyList<SemanticTriple> triples,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<MemoryFactRecord>(triples.Count);
+        foreach (var triple in triples)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var record = new MemoryFactRecord
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                EntityId = entityId,
+                Content = triple.ToFactText(),
+                Embedding = ReadOnlyMemory<float>.Empty,
+                MemoryType = "semantic_triple",
+                Confidence = 0.5,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Summaries = Array.Empty<MemorySummary>()
+            };
+
+            records.Add(record);
+        }
+
+        foreach (var record in records)
+        {
+            await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    async ValueTask upsertAttributesAsync(
+        string processId,
+        IReadOnlyList<string> attributes,
+        CancellationToken cancellationToken)
+    {
+        var records = new List<MemoryFactRecord>(attributes.Count);
+        foreach (var attribute in attributes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.IsNullOrWhiteSpace(attribute))
+                continue;
+
+            var record = new MemoryFactRecord
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                EntityId = processId,
+                Content = attribute,
+                Embedding = ReadOnlyMemory<float>.Empty,
+                MemoryType = "process_attribute",
+                Confidence = 0.5,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Summaries = Array.Empty<MemorySummary>()
+            };
+
+            records.Add(record);
+        }
+
+        foreach (var record in records)
+        {
+            await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

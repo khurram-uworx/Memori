@@ -12,8 +12,9 @@ dotnet add package Memori
 
 ## What You Get
 
-- A pluggable `IStorage` abstraction — bring your own backend (PostgreSQL, SQL Server, Redis, etc.)
-- Built-in `InMemoryStorage` for tests, demos, and local development
+- `IConversationStorage` for conversation/session/entity/process data — bring your own backend
+- `VectorStoreCollection<string, MemoryFactRecord>` for durable fact storage via any `Microsoft.Extensions.VectorData` provider
+- Built-in `InMemoryConversationStorage` and `InMemoryVectorStore` for tests, demos, and local development
 - `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
 - A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
 - `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
@@ -21,31 +22,27 @@ dotnet add package Memori
 ## Basic Example
 
 ```csharp
-using Memori.Embeddings;
 using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
 
-var storage = new InMemoryStorage();
-var embeddings = new DeterministicEmbeddingGenerator();
+var conversationStorage = new InMemoryConversationStorage();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var entityId = await storage.GetOrCreateEntityAsync("user_123");
-var factEmbedding = await embeddings.GenerateEmbeddingAsync(
-    "The user's favorite color is blue");
+var entityId = await conversationStorage.GetOrCreateEntityAsync("user_123");
 
-await storage.AddFactsAsync(
-    entityId,
-    new[]
-    {
-        new NewMemoryFact(
-            "The user's favorite color is blue",
-            factEmbedding)
-    });
+await factCollection.UpsertAsync(new MemoryFactRecord
+{
+    Id = Guid.NewGuid().ToString("N"),
+    EntityId = entityId,
+    Content = "The user's favorite color is blue",
+    CreatedAt = DateTimeOffset.UtcNow
+});
 
 var search = new MemorySearchService(
-    storage,
-    embeddings,
-    new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+    factCollection,
+    options: new MemoriOptions { RecallRelevanceThreshold = 0.1 });
 
 var results = await search.RecallAsync(entityId, "What is my favorite color?");
 Console.WriteLine(search.FormatPromptContext(results));
@@ -58,8 +55,13 @@ using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
 
+var conversationStorage = new InMemoryConversationStorage();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+
 var memori = new Memori.Memori(
-    new InMemoryStorage(),
+    conversationStorage,
+    factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
     augmentationClient: new NullAugmentationClient());
 
@@ -112,14 +114,12 @@ Bind from configuration:
 services.AddMemori(configuration.GetSection("Memori"));
 ```
 
-Supply custom storage, embedding, and augmentation through factories:
+Supply custom conversation storage, embedding, and augmentation through factories:
 
 ```csharp
 services.AddMemori(
-    sp => sp.GetRequiredService<IStorage>(),
-    sp => sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
-    sp => sp.GetRequiredService<IAugmentationClient>(),
-    options => { options.RecallRelevanceThreshold = 0.2; });
+    sp => new MyConversationStorage(),
+    configureOptions: options => { options.RecallRelevanceThreshold = 0.2; });
 ```
 
 ## Augmentation
@@ -139,7 +139,7 @@ Augmentation extracts structured memory (facts, semantic triples, process attrib
 
 ## Status
 
-Early development. Core memory primitives, `IChatClient` middleware, and NUnit tests are implemented. No first-party database integrations are included in this package — implement `IStorage` in your own package and pass it to Memori.
+Early development. Phase 1 (core primitives, `IChatClient` middleware) and Phase 2 Tier 1 (VectorStore foundation) are complete. No first-party database integrations are included in this package — implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
 
 ## License
 

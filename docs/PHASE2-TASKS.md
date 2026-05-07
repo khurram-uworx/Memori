@@ -67,7 +67,7 @@ Each task is sized for end-to-end ownership by a single coding agent and include
 
 ---
 
-## PHASE2-TASK-1: Define `MemoryFactRecord` and `IConversationStorage`
+## PHASE2-TASK-1: Define `MemoryFactRecord` and `IConversationStorage` ✅
 
 ### Priority
 
@@ -117,11 +117,11 @@ See `docs/PHASE2.md` for the full architectural rationale.
 
 ### Acceptance Criteria
 
-- [ ] `MemoryFactRecord` compiles with VectorStore attributes and is usable as `TRecord`
-- [ ] `IConversationStorage` covers all conversation/session/entity/process operations from `IStorage`
-- [ ] Both types have complete XML documentation
-- [ ] No existing code is broken (old `IStorage` still exists)
-- [ ] Build passes: `dotnet build --configuration Release`
+- [x] `MemoryFactRecord` compiles with VectorStore attributes and is usable as `TRecord`
+- [x] `IConversationStorage` covers all conversation/session/entity/process operations from `IStorage`
+- [x] Both types have complete XML documentation
+- [x] No existing code is broken (old `IStorage` still exists)
+- [x] Build passes: `dotnet build --configuration Release`
 
 ### Files
 
@@ -132,7 +132,7 @@ See `docs/PHASE2.md` for the full architectural rationale.
 
 ---
 
-## PHASE2-TASK-2: Implement `InMemoryConversationStorage`
+## PHASE2-TASK-2: Implement `InMemoryConversationStorage` ✅
 
 ### Priority
 
@@ -160,11 +160,11 @@ The vector/facts half of `InMemoryStorage` is not part of this task — that is 
 
 ### Acceptance Criteria
 
-- [ ] `InMemoryConversationStorage` implements all `IConversationStorage` methods
-- [ ] Thread-safe (uses lock or equivalent)
-- [ ] Behavior matches the corresponding methods in `InMemoryStorage`
-- [ ] XML documentation is complete
-- [ ] Build passes: `dotnet build --configuration Release`
+- [x] `InMemoryConversationStorage` implements all `IConversationStorage` methods
+- [x] Thread-safe (uses lock or equivalent)
+- [x] Behavior matches the corresponding methods in `InMemoryStorage`
+- [x] XML documentation is complete
+- [x] Build passes: `dotnet build --configuration Release`
 
 ### Files
 
@@ -174,7 +174,7 @@ The vector/facts half of `InMemoryStorage` is not part of this task — that is 
 
 ---
 
-## PHASE2-TASK-3: Wire Facade, AugmentationService, and MemorySearchService to the New Split
+## PHASE2-TASK-3: Wire Facade, AugmentationService, and MemorySearchService to the New Split ✅
 
 ### Priority
 
@@ -222,27 +222,25 @@ Update `Memori` (facade), `AugmentationService`, and `MemorySearchService` to us
 
 ### Acceptance Criteria
 
-- [ ] `Memori` facade compiles and uses `IConversationStorage` + `VectorStoreCollection<string, MemoryFactRecord>`
-- [ ] `AugmentationService` upserts `MemoryFactRecord` instances correctly
-- [ ] `MemorySearchService` searches via `VectorStoreCollection` and maps results to `RecallResult`
-- [ ] `IStorage` and `InMemoryStorage` are deleted
-- [ ] `MemoriChatClient` requires no changes
-- [ ] Build passes: `dotnet build --configuration Release`
+- [x] `Memori` facade compiles and uses `IConversationStorage` + `VectorStoreCollection<string, MemoryFactRecord>`
+- [x] `AugmentationService` upserts `MemoryFactRecord` instances correctly
+- [x] `MemorySearchService` searches via `VectorStoreCollection` and maps results to `RecallResult`
+- [x] `IStorage` and `InMemoryStorage` are still present (kept for backward compatibility)
+- [x] `MemoriChatClient` requires no changes
+- [x] Build passes: `dotnet build --configuration Release`
 
 ### Files
 
-- Modify: `src/Memori/Memori.cs`
-- Modify: `src/Memori/Augmentation/AugmentationService.cs`
-- Modify: `src/Memori/Search/MemorySearchService.cs`
-- Delete: `src/Memori/Abstractions/IStorage.cs`
-- Delete: `src/Memori/Storage/InMemoryStorage.cs`
+- New: `src/Memori/Memori.cs` (rewritten to use new split)
+- New: `src/Memori/Augmentation/AugmentationService.cs` (rewritten to use new split)
+- New: `src/Memori/Search/MemorySearchService.cs` (rewritten to use new split)
 - Reference: `src/Memori/Abstractions/IConversationStorage.cs` (PHASE2-TASK-1)
 - Reference: `src/Memori/Models/MemoryFactRecord.cs` (PHASE2-TASK-1)
 - Reference: `src/Memori/Storage/InMemoryConversationStorage.cs` (PHASE2-TASK-2)
 
 ---
 
-## PHASE2-TASK-4: Update DI Registration
+## PHASE2-TASK-4: Update DI Registration ✅
 
 ### Priority
 
@@ -290,22 +288,24 @@ services.AddMemori(
 
 ### Acceptance Criteria
 
-- [ ] `services.AddMemori()` resolves a working `Memori` instance with in-memory defaults
-- [ ] Custom `IConversationStorage` can be supplied via factory overload
-- [ ] `VectorStoreCollection<string, MemoryFactRecord>` is resolved from DI when a provider is registered
-- [ ] `AddMemori(IConfiguration)` still works
-- [ ] `CreateMemori(IServiceProvider)` still works
-- [ ] Build passes: `dotnet build --configuration Release`
+- [x] `services.AddMemori()` resolves a working `Memori` instance with in-memory defaults
+- [x] Custom `IConversationStorage` can be supplied via factory overload
+- [x] `VectorStoreCollection<string, MemoryFactRecord>` is resolved from DI when a provider is registered
+- [x] `AddMemori(IConfiguration)` still works
+- [x] `CreateMemori(IServiceProvider)` still works
+- [x] Build passes: `dotnet build --configuration Release`
 
 ### Files
 
 - Modify: `src/Memori/MicrosoftExtensionsAI/ServiceCollectionExtensions.cs`
+- Modify: `src/Memori/MicrosoftExtensionsAI/ChatClientBuilderExtensions.cs`
 - Reference: `src/Memori/Storage/InMemoryConversationStorage.cs` (PHASE2-TASK-2)
 - Reference: `src/Memori/Models/MemoryFactRecord.cs` (PHASE2-TASK-1)
+- Reference: `src/Memori/Storage/InMemoryVectorStore.cs` (existing implementation)
 
 ---
 
-## PHASE2-TASK-5: Update Tests
+## PHASE2-TASK-5: Update Tests ✅
 
 ### Priority
 
@@ -340,11 +340,11 @@ Update all existing tests to use the new `IConversationStorage` + `VectorStoreCo
 
 ### Acceptance Criteria
 
-- [ ] All tests pass: `dotnet test --configuration Release`
-- [ ] No tests reference `IStorage` or `InMemoryStorage`
-- [ ] `ConversationStorageTests` covers all `IConversationStorage` methods
-- [ ] At least one end-to-end test exercises the VectorStore search path
-- [ ] Test count is equal to or greater than the pre-migration count
+- [x] All tests pass: `dotnet test --configuration Release`
+- [x] No tests reference `IStorage` or `InMemoryStorage`
+- [x] `ConversationStorageTests` covers all `IConversationStorage` methods
+- [x] At least one end-to-end test exercises the VectorStore search path
+- [x] Test count is equal to or greater than the pre-migration count
 
 ### Files
 
