@@ -42,6 +42,12 @@ Match CI defaults when possible (`Release` configuration, full test run).
   - C# uses 4 spaces and CRLF line endings.
   - Nullable is enabled; avoid introducing nullability warnings.
   - Private fields use `camelCase` without underscore prefix.
+- C# class member ordering:
+  - Inner classes first, then constructors, then properties, then methods.
+  - Static members before instance members.
+  - Private members first, protected second, internal third, public last.
+- It is fine to keep multiple closely related small classes in the same file.
+- Prefer record types for simple data carriers (config models, DTOs) and classes for entities/services.
 - Keep public API names and docs clear; this package is intended for external consumption.
 - Prefer domain-oriented APIs; do not leak provider-specific storage details into `Memori`.
 - Keep async APIs cancellation-aware and use `ConfigureAwait(false)` in library code.
@@ -78,5 +84,19 @@ Match CI defaults when possible (`Release` configuration, full test run).
 
 - Keep edits minimal and cohesive.
 - Update `README.md` when public behavior or usage changes.
+- Update `GETTING-STARTED.md` and `ARCHITECTURE.md` when the public API surface, storage contract, augmentation contract, or middleware behavior changes.
 - Prefer extending existing patterns over introducing parallel abstractions.
 - If a change impacts architecture direction, capture rationale in `docs/`.
+
+## PR Instructions
+
+- Keep changes focused; avoid unrelated refactors.
+- Before opening a PR, run:
+  - `dotnet restore`
+  - `dotnet build --configuration Release`
+  - `dotnet test --configuration Release`
+- PR summaries should mention:
+  - what behavior changed
+  - what tests were added or updated
+  - whether any public doc files (`README.md`, `GETTING-STARTED.md`, `ARCHITECTURE.md`, `src/Memori/README.md`) were updated
+- If implementation had to diverge from `README.md`, document that clearly in the PR notes.

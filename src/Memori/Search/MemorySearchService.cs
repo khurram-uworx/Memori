@@ -19,9 +19,6 @@ public sealed class MemorySearchService
         return result.Similarity > 0 ? result.Similarity : 0;
     }
 
-    static string formatTimestampSuffix(DateTimeOffset createdAt)
-        => $". Stated at {createdAt.ToString("u", CultureInfo.InvariantCulture).TrimEnd('Z')}";
-
     readonly IStorage storage;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly MemoriOptions options;
@@ -61,6 +58,28 @@ public sealed class MemorySearchService
 
     bool isRelevant(RecallResult result)
         => scoreForThreshold(result) >= options.RecallRelevanceThreshold;
+
+    string formatTimestamp(DateTimeOffset createdAt)
+        => createdAt.ToString(options.PromptTimestampFormat, CultureInfo.InvariantCulture).TrimEnd('Z');
+
+    string formatTimestampSuffix(DateTimeOffset createdAt)
+        => $". Stated at {formatTimestamp(createdAt)}";
+
+    string formatFactLine(RecallResult result)
+    {
+        var suffix = options.IncludeFactTimestampsInPrompt
+            ? formatTimestampSuffix(result.CreatedAt)
+            : string.Empty;
+        return $"{options.PromptFactBullet.Trim()} {result.Content}{suffix}";
+    }
+
+    string formatSummaryLine(MemorySummary summary)
+    {
+        var timestamp = options.IncludeFactTimestampsInPrompt
+            ? $"[{formatTimestamp(summary.CreatedAt)}] "
+            : string.Empty;
+        return $"{options.PromptSummaryBullet.Trim()} {timestamp}{summary.Content}";
+    }
 
     /// <summary>
     /// Recalls relevant facts for an entity and query.
@@ -108,10 +127,7 @@ public sealed class MemorySearchService
             if (string.IsNullOrWhiteSpace(result.Content))
                 continue;
 
-            var suffix = options.IncludeFactTimestampsInPrompt
-                ? formatTimestampSuffix(result.CreatedAt)
-                : string.Empty;
-            lines.Add($"- {result.Content}{suffix}");
+            lines.Add(formatFactLine(result));
         }
 
         return lines;
@@ -125,6 +141,9 @@ public sealed class MemorySearchService
         ArgumentNullException.ThrowIfNull(results);
 
         var lines = new List<string>();
+        if (!options.IncludeSummariesInPrompt)
+            return lines;
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var summary in results.SelectMany(result => result.Summaries))
@@ -136,13 +155,65 @@ public sealed class MemorySearchService
             if (!seen.Add(key))
                 continue;
 
-            if (options.IncludeFactTimestampsInPrompt)
-                lines.Add($"- [{summary.CreatedAt.ToString("u", CultureInfo.InvariantCulture).TrimEnd('Z')}] {summary.Content}");
-            else
-                lines.Add($"- {summary.Content}");
+            lines.Add(formatSummaryLine(summary));
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// Builds structured prompt context for recalled memories.
+    /// </summary>
+    public PromptContext BuildPromptContext(IReadOnlyList<RecallResult> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        var facts = new List<PromptContextFact>(results.Count);
+        foreach (var result in results)
+        {
+            if (string.IsNullOrWhiteSpace(result.Content))
+                continue;
+
+            facts.Add(new PromptContextFact(
+                result.FactId,
+                result.Content,
+                result.MemoryType,
+                result.Confidence,
+                result.Similarity,
+                result.RankScore,
+                result.CreatedAt,
+                formatFactLine(result)));
+        }
+
+        var summaries = new List<PromptContextSummary>();
+        if (options.IncludeSummariesInPrompt)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var summary in results.SelectMany(result => result.Summaries))
+            {
+                if (string.IsNullOrWhiteSpace(summary.Content))
+                    continue;
+
+                var key = summary.Content.Trim();
+                if (!seen.Add(key))
+                    continue;
+
+                summaries.Add(new PromptContextSummary(
+                    summary.Content,
+                    summary.CreatedAt,
+                    formatSummaryLine(summary)));
+            }
+        }
+
+        var metadata = new PromptContextMetadata(
+            options.PromptContextTagName.Trim(),
+            options.PromptContextInstruction,
+            options.PromptFactsHeading,
+            options.PromptSummariesHeading,
+            options.IncludeFactTimestampsInPrompt,
+            options.IncludeSummariesInPrompt);
+
+        return new PromptContext(facts, summaries, metadata, renderPromptContext(facts, summaries, metadata));
     }
 
     /// <summary>
@@ -151,31 +222,35 @@ public sealed class MemorySearchService
     public string FormatPromptContext(IReadOnlyList<RecallResult> results)
     {
         ArgumentNullException.ThrowIfNull(results);
-        var factLines = FormatFactLines(results);
+        return BuildPromptContext(results).RenderedText;
+    }
 
-        if (factLines.Count == 0)
+    static string renderPromptContext(
+        IReadOnlyList<PromptContextFact> facts,
+        IReadOnlyList<PromptContextSummary> summaries,
+        PromptContextMetadata metadata)
+    {
+        if (facts.Count == 0)
             return string.Empty;
 
-        var summaries = FormatSummaryLines(results);
-        var tagName = options.PromptContextTagName.Trim();
         var builder = new StringBuilder();
-        builder.Append('<').Append(tagName).AppendLine(">");
-        builder.AppendLine(options.PromptContextInstruction);
-        builder.AppendLine(options.PromptFactsHeading);
+        builder.Append('<').Append(metadata.TagName).AppendLine(">");
+        builder.AppendLine(metadata.Instruction);
+        builder.AppendLine(metadata.FactsHeading);
 
-        foreach (var line in factLines)
-            builder.AppendLine(line);
+        foreach (var fact in facts)
+            builder.AppendLine(fact.RenderedText);
 
         if (summaries.Count > 0)
         {
             builder.AppendLine();
-            builder.AppendLine("## Summaries");
+            builder.AppendLine(metadata.SummariesHeading);
 
-            foreach (var line in summaries)
-                builder.AppendLine(line);
+            foreach (var summary in summaries)
+                builder.AppendLine(summary.RenderedText);
         }
 
-        builder.Append("</").Append(tagName).Append('>');
+        builder.Append("</").Append(metadata.TagName).Append('>');
 
         return builder.ToString();
     }

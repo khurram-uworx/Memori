@@ -9,6 +9,34 @@ namespace Memori.Tests;
 public class PromptAugmentationClientTests
 {
     [Test]
+    public void AugmentationMapper_CreatesModelsAndIgnoresEmptyValues()
+    {
+        var summary = AugmentationMapper.ToSummary("  User likes coffee.  ");
+        var fact = AugmentationMapper.ToFact(
+            "  The user likes coffee.  ",
+            " preference ",
+            summaries: summary is null ? null : [summary]);
+        var triple = AugmentationMapper.ToSemanticTriple(
+            " user ",
+            " person ",
+            " likes ",
+            " coffee ",
+            " drink ");
+        var attributes = AugmentationMapper.ToProcessAttributes([" support ", "", "support", "triage"]);
+
+        Assert.That(fact, Is.Not.Null);
+        Assert.That(fact!.Content, Is.EqualTo("The user likes coffee."));
+        Assert.That(fact.MemoryType, Is.EqualTo("preference"));
+        Assert.That(fact.Summaries, Has.Count.EqualTo(1));
+        Assert.That(triple, Is.Not.Null);
+        Assert.That(triple!.ToFactText(), Is.EqualTo("user likes coffee"));
+        Assert.That(attributes, Is.EqualTo(["support", "triage"]));
+        Assert.That(AugmentationMapper.ToFact(" "), Is.Null);
+        Assert.That(AugmentationMapper.ToSemanticTriple("user", "person", "", "coffee", "drink"), Is.Null);
+        Assert.That(AugmentationMapper.ToSummary(" "), Is.Null);
+    }
+
+    [Test]
     public async Task AugmentAsync_ParsesStructuredJsonOutput()
     {
         var client = new PromptAugmentationClient(

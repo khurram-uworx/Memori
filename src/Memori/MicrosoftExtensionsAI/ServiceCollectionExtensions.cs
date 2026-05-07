@@ -4,7 +4,9 @@ using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Memori;
 
@@ -33,6 +35,34 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    static IServiceCollection addOptions(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddSingleton(sp =>
+        {
+            var options = configuration.Get<MemoriOptions>() ?? new MemoriOptions();
+            options.Validate();
+            return options;
+        });
+
+        return services;
+    }
+
+    static IServiceCollection addCoreServices(IServiceCollection services)
+    {
+        services.TryAddSingleton<IStorage, InMemoryStorage>();
+        services.TryAddSingleton<IAugmentationClient, NullAugmentationClient>();
+        services.TryAddSingleton<MemorySearchService>();
+        services.TryAddSingleton(sp => new Memori(
+            sp.GetRequiredService<IStorage>(),
+            sp.GetRequiredService<MemoriOptions>(),
+            augmentationClient: sp.GetRequiredService<IAugmentationClient>(),
+            embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>()));
+
+        return services;
+    }
+
     /// <summary>
     /// Registers Memori services.
     /// </summary>
@@ -42,13 +72,21 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         addOptions(services, configureOptions);
+        return addCoreServices(services);
+    }
 
-        services.AddSingleton<IStorage, InMemoryStorage>();
-        services.AddSingleton<IAugmentationClient, NullAugmentationClient>();
-        services.AddSingleton<Memori>();
-        services.AddSingleton<MemorySearchService>();
+    /// <summary>
+    /// Registers Memori services and binds <see cref="MemoriOptions"/> from configuration.
+    /// </summary>
+    public static IServiceCollection AddMemori(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        return services;
+        addOptions(services, configuration);
+        return addCoreServices(services);
     }
 
     /// <summary>
@@ -64,11 +102,7 @@ public static class ServiceCollectionExtensions
 
         addOptions(services, configureOptions);
         services.AddSingleton(sp => storageFactory(sp));
-        services.AddSingleton<IAugmentationClient, NullAugmentationClient>();
-        services.AddSingleton<Memori>();
-        services.AddSingleton<MemorySearchService>();
-
-        return services;
+        return addCoreServices(services);
     }
 
     /// <summary>
@@ -95,14 +129,32 @@ public static class ServiceCollectionExtensions
         else
             services.AddSingleton<IAugmentationClient, NullAugmentationClient>();
 
-        services.AddSingleton(sp => new Memori(
-            sp.GetRequiredService<IStorage>(),
-            sp.GetRequiredService<MemoriOptions>(),
-            augmentationClient: sp.GetRequiredService<IAugmentationClient>(),
-            embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>()));
-        services.AddSingleton<MemorySearchService>();
+        return addCoreServices(services);
+    }
 
-        return services;
+    /// <summary>
+    /// Registers Memori services with custom factories for the common composition points.
+    /// </summary>
+    public static IServiceCollection AddMemori(
+        this IServiceCollection services,
+        Func<IServiceProvider, IStorage> storageFactory,
+        Func<IServiceProvider, IEmbeddingGenerator<string, Embedding<float>>>? embeddingGeneratorFactory,
+        Func<IServiceProvider, IAugmentationClient>? augmentationClientFactory,
+        Action<MemoriOptions>? configureOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(storageFactory);
+
+        addOptions(services, configureOptions);
+        services.AddSingleton(sp => storageFactory(sp));
+
+        if (embeddingGeneratorFactory is not null)
+            services.AddSingleton(sp => embeddingGeneratorFactory(sp));
+
+        if (augmentationClientFactory is not null)
+            services.AddSingleton(sp => augmentationClientFactory(sp));
+
+        return addCoreServices(services);
     }
 
     /// <summary>
@@ -117,13 +169,8 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(embeddingGeneratorFactory);
 
         addOptions(services, configureOptions);
-        services.AddSingleton<IStorage, InMemoryStorage>();
         services.AddSingleton(sp => embeddingGeneratorFactory(sp));
-        services.AddSingleton<IAugmentationClient, NullAugmentationClient>();
-        services.AddSingleton<Memori>();
-        services.AddSingleton<MemorySearchService>();
-
-        return services;
+        return addCoreServices(services);
     }
 
     /// <summary>
@@ -138,12 +185,16 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(augmentationClientFactory);
 
         addOptions(services, configureOptions);
-        services.AddSingleton<IStorage, InMemoryStorage>();
         services.AddSingleton(sp => augmentationClientFactory(sp));
-        services.AddSingleton<Memori>();
-        services.AddSingleton<MemorySearchService>();
-
-        return services;
+        return addCoreServices(services);
     }
 
+    /// <summary>
+    /// Resolves a configured Memori facade from a service provider.
+    /// </summary>
+    public static Memori CreateMemori(this IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.GetRequiredService<Memori>();
+    }
 }

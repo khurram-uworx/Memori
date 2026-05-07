@@ -96,11 +96,11 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a comprehensive registration API that covers the common path with defaults.
-- [ ] Add factory-based overloads for host-provided `IStorage`, `IEmbeddingGenerator<string, Embedding<float>>`, and `IAugmentationClient`.
-- [ ] Add a configuration-bound options path so `MemoriOptions` can be created from standard .NET configuration.
-- [ ] Add a clean way to create a `Memori` instance from `IServiceProvider` without explicit plumbing.
-- [ ] Add tests that verify the DI graph resolves correctly and that custom factories are honored.
+- [x] Add a comprehensive registration API that covers the common path with defaults.
+- [x] Add factory-based overloads for host-provided `IStorage`, `IEmbeddingGenerator<string, Embedding<float>>`, and `IAugmentationClient`.
+- [x] Add a configuration-bound options path so `MemoriOptions` can be created from standard .NET configuration.
+- [x] Add a clean way to create a `Memori` instance from `IServiceProvider` without explicit plumbing.
+- [x] Add tests that verify the DI graph resolves correctly and that custom factories are honored.
 
 ### 2. Prompt injection placement and styles
 
@@ -115,10 +115,10 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a placement policy for where recalled memory is inserted relative to existing chat history.
-- [ ] Keep system-message injection as the default and support alternative injection roles or styles for developer messages, instruction messages, or tool-like context through explicit host configuration.
-- [ ] Allow hosts to prepend, append, or merge memory context with an existing host-provided instruction message.
-- [ ] Add tests for insertion before all messages, after existing system/developer messages, and disabled injection.
+- [x] Add a placement policy for where recalled memory is inserted relative to existing chat history.
+- [x] Keep system-message injection as the default and support alternative injection roles or styles for developer messages, instruction messages, or tool-like context through explicit host configuration.
+- [x] Allow hosts to prepend, append, or merge memory context with an existing host-provided instruction message.
+- [x] Add tests for insertion before all messages, after existing system/developer messages, and disabled injection.
 
 ### 3. Structured prompt formatting output
 
@@ -132,10 +132,10 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a public structured prompt context model with separate facts, summaries, metadata, and final rendered text.
-- [ ] Add formatting options for bullet style, timestamp rendering, section headings, and summary inclusion.
-- [ ] Provide helpers for hosts that want to render memory context in UI or custom prompt templates.
-- [ ] Add tests for structured output and string rendering consistency.
+- [x] Add a public structured prompt context model with separate facts, summaries, metadata, and final rendered text.
+- [x] Add formatting options for bullet style, timestamp rendering, section headings, and summary inclusion.
+- [x] Provide helpers for hosts that want to render memory context in UI or custom prompt templates.
+- [x] Add tests for structured output and string rendering consistency.
 
 ### 4. Broader message filtering before persistence
 
@@ -152,11 +152,11 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a configurable `ConversationMessage` filter for persistence after conversion from provider messages.
-- [ ] Allow hosts to drop tool messages, developer messages, empty messages, or provider-specific messages.
-- [ ] Allow hosts to redact or transform message content before storage.
-- [ ] Add tests for role-based filtering and custom predicate filtering.
-- [ ] Document that provider-native pre-conversion filtering is intentionally deferred until concrete provider scenarios justify it.
+- [x] Add a configurable `ConversationMessage` filter for persistence after conversion from provider messages.
+- [x] Allow hosts to drop tool messages, developer messages, empty messages, or provider-specific messages.
+- [x] Allow hosts to redact or transform message content before storage.
+- [x] Add tests for role-based filtering and custom predicate filtering.
+- [x] Document that provider-native pre-conversion filtering is intentionally deferred until concrete provider scenarios justify it.
 
 ### 5. Provider metadata, continuations, and background responses
 
@@ -171,11 +171,11 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Preserve useful provider metadata from `ChatResponse` and `ChatResponseUpdate` where available.
-- [ ] Add explicit handling for continuation tokens if exposed by Microsoft.Extensions.AI APIs.
-- [ ] Add explicit handling for background or deferred responses if supported by provider clients.
-- [ ] Document which metadata is stored, ignored, or intentionally not normalized.
-- [ ] Add fake provider tests for continuation/background response scenarios when APIs support them.
+- [x] Preserve useful provider metadata from `ChatResponse` and `ChatResponseUpdate` where available.
+- [x] Add explicit handling for continuation tokens if exposed by Microsoft.Extensions.AI APIs.
+- [x] Add explicit handling for background or deferred responses if supported by provider clients.
+- [x] Document which metadata is stored, ignored, or intentionally not normalized.
+- [x] Add fake provider tests for continuation/background response scenarios when APIs support them.
 
 ### 6. Entity and session lifecycle ergonomics
 
@@ -192,10 +192,10 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add read-only accessors for current attribution and session id if they are safe for the chosen lifetime model.
-- [ ] Add `ClearAttribution()` and `ClearSession()` helpers.
-- [ ] Add a session resume helper for hosts that manage conversation lifecycle externally, while keeping recall/delete memory operations entity-scoped.
-- [ ] Add tests for session reuse, timeout rollover, clear, and resume behavior.
+- [x] Add read-only accessors for current attribution and session id if they are safe for the chosen lifetime model.
+- [x] Add `ClearAttribution()` and `ClearSession()` helpers.
+- [x] Add a session resume helper for hosts that manage conversation lifecycle externally, while keeping recall/delete memory operations entity-scoped.
+- [x] Add tests for session reuse, timeout rollover, clear, and resume behavior.
 
 ### 7. Storage implementer experience
 
@@ -211,10 +211,10 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a storage implementer guide with expected semantics for every `IStorage` method.
-- [ ] Add examples for custom storage implementations.
-- [ ] Add in-process storage contract tests in `src/Memori.Tests` that can be reused internally without creating a separate test package.
-- [ ] Document concurrency, idempotency, and atomicity expectations in more detail.
+- [x] Add a storage implementer guide with expected semantics for every `IStorage` method.
+- [x] Add examples for custom storage implementations.
+- [x] Add in-process storage contract tests in `src/Memori.Tests` that can be reused internally without creating a separate test package.
+- [x] Document concurrency, idempotency, and atomicity expectations in more detail.
 
 ### 8. Augmentation developer experience
 
@@ -229,10 +229,10 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a custom augmentation client guide.
-- [ ] Add helpers for mapping raw extraction output into `NewMemoryFact`, `SemanticTriple`, attributes, and summaries.
-- [ ] Add guidance for deduplication and idempotency expectations around generated memories.
-- [ ] Add tests that verify each augmentation output type is written correctly.
+- [x] Add a custom augmentation client guide.
+- [x] Add helpers for mapping raw extraction output into `NewMemoryFact`, `SemanticTriple`, attributes, and summaries.
+- [x] Add guidance for deduplication and idempotency expectations around generated memories.
+- [x] Add tests that verify each augmentation output type is written correctly.
 
 ### 9. Documentation and examples
 
@@ -247,12 +247,12 @@ Follow-up value:
 
 Tasks:
 
-- [ ] Add a compact getting-started guide for the .NET library.
-- [ ] Add a complete chat integration example using `ChatClientBuilder`.
-- [ ] Add a dependency injection example using `IServiceCollection`.
-- [ ] Add a custom storage implementation guide.
-- [ ] Add a custom augmentation/extraction guide.
-- [ ] Add a runnable hero scenario example that shows attribution, capture, augmentation, recall, and injection across turns.
+- [x] Add a compact getting-started guide for the .NET library.
+- [x] Add a complete chat integration example using `ChatClientBuilder`.
+- [x] Add a dependency injection example using `IServiceCollection`.
+- [x] Add a custom storage implementation guide.
+- [x] Add a custom augmentation/extraction guide.
+- [x] Add a runnable hero scenario example that shows attribution, capture, augmentation, recall, and injection across turns.
 
 ### 10. Test hardening beyond Phase 1
 

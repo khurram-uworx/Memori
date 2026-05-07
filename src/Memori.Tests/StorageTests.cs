@@ -6,18 +6,21 @@ using NUnit.Framework;
 namespace Memori.Tests;
 
 /// <summary>
-/// Contract-style tests for <see cref="IStorage"/> implementations.
-/// These tests verify the reference behavior of <see cref="InMemoryStorage"/>
-/// and serve as a specification for custom storage providers.
+/// Reusable contract-style tests for <see cref="IStorage"/> implementations.
 /// </summary>
-public class StorageTests
+public abstract class StorageContractTests
 {
+    /// <summary>
+    /// Creates a fresh storage instance for each contract test.
+    /// </summary>
+    protected abstract IStorage CreateStorage();
+
     #region Idempotent Get-or-Create Behavior
 
     [Test]
     public async Task GetOrCreateEntityAsync_IsIdempotent()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var first = await storage.GetOrCreateEntityAsync("user-1");
         var second = await storage.GetOrCreateEntityAsync("user-1");
@@ -28,7 +31,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateEntityAsync_ReturnsDifferentIdsForDifferentExternalIds()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var id1 = await storage.GetOrCreateEntityAsync("user-1");
         var id2 = await storage.GetOrCreateEntityAsync("user-2");
@@ -39,7 +42,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateProcessAsync_IsIdempotent()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var first = await storage.GetOrCreateProcessAsync("workflow-1");
         var second = await storage.GetOrCreateProcessAsync("workflow-1");
@@ -50,7 +53,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateProcessAsync_ReturnsDifferentIdsForDifferentExternalIds()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var id1 = await storage.GetOrCreateProcessAsync("workflow-1");
         var id2 = await storage.GetOrCreateProcessAsync("workflow-2");
@@ -61,7 +64,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateSessionAsync_IsIdempotent()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var first = await storage.GetOrCreateSessionAsync("session-1", "entity-1", "process-1");
         var second = await storage.GetOrCreateSessionAsync("session-1", null, null);
@@ -72,7 +75,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateSessionAsync_PreservesEntityAndProcessOnFirstCall()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("user-1");
         var processId = await storage.GetOrCreateProcessAsync("workflow-1");
 
@@ -84,7 +87,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateSessionAsync_MergesEntityAndProcessOnSubsequentCalls()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("user-1");
         var processId = await storage.GetOrCreateProcessAsync("workflow-1");
 
@@ -104,7 +107,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateConversationAsync_CreatesNewConversationWhenNoneExists()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
@@ -116,7 +119,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateConversationAsync_ReturnsExistingConversationWithinTimeout()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var first = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
         var second = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
@@ -127,7 +130,7 @@ public class StorageTests
     [Test]
     public async Task GetOrCreateConversationAsync_CreatesNewConversationAfterTimeout()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var first = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMilliseconds(100));
         await Task.Delay(150);
@@ -139,7 +142,7 @@ public class StorageTests
     [Test]
     public void GetOrCreateConversationAsync_ThrowsOnInvalidTimeout()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             async () => await storage.GetOrCreateConversationAsync("session-1", TimeSpan.Zero));
@@ -155,7 +158,7 @@ public class StorageTests
     [Test]
     public async Task AppendMessagesAsync_PreservesMessageOrder()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
         await storage.AppendMessagesAsync(conversation.Id, new[]
@@ -173,7 +176,7 @@ public class StorageTests
     [Test]
     public async Task AppendMessagesAsync_AllowsMultipleAppends()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
         await storage.AppendMessagesAsync(conversation.Id, new[]
@@ -194,7 +197,7 @@ public class StorageTests
     [Test]
     public async Task GetConversationMessagesAsync_ReturnsEmptyListForNewConversation()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
         var messages = await storage.GetConversationMessagesAsync(conversation.Id);
@@ -205,7 +208,7 @@ public class StorageTests
     [Test]
     public async Task AppendMessagesAsync_UpdatesConversationTimestamp()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
         var originalUpdatedAt = conversation.UpdatedAt;
 
@@ -227,7 +230,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_ReturnsBestRankedFactsLexicalOnly()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -245,7 +248,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_ReturnsEmptyWhenNoFactsMatch()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -260,7 +263,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_ReturnsEmptyForNonexistentEntity()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
 
         var results = await storage.SearchFactsAsync("nonexistent-entity", "query", null, 5, 10);
 
@@ -270,7 +273,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_RespectsCandidateLimit()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -289,7 +292,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_RespectsResultLimit()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -308,7 +311,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_PrefersHigherConfidenceWhenLexicalSignalsMatch()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var older = DateTimeOffset.UtcNow.AddHours(-1);
         var newer = DateTimeOffset.UtcNow;
@@ -329,7 +332,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_PrefersNewerFactsWhenSignalsMatch()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var older = DateTimeOffset.UtcNow.AddHours(-2);
         var newer = DateTimeOffset.UtcNow.AddMinutes(-1);
@@ -350,7 +353,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_PreservesMemoryType()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -368,7 +371,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_PreservesEmbeddings()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var embedding = new[] { 0.1f, 0.2f, 0.3f };
 
@@ -386,7 +389,7 @@ public class StorageTests
     [Test]
     public async Task SearchFactsAsync_PreservesSummaries()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var summary = new MemorySummary("user prefers coffee", DateTimeOffset.UtcNow);
 
@@ -409,7 +412,7 @@ public class StorageTests
     [Test]
     public async Task DeleteEntityMemoriesAsync_RemovesFacts()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddFactsAsync(entityId, new[]
         {
@@ -426,7 +429,7 @@ public class StorageTests
     [Test]
     public async Task DeleteEntityMemoriesAsync_RemovesSemanticTriples()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         await storage.AddSemanticTriplesAsync(entityId, new[]
         {
@@ -449,7 +452,7 @@ public class StorageTests
     [Test]
     public async Task DeleteEntityMemoriesAsync_PreservesConversationHistory()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var sessionId = await storage.GetOrCreateSessionAsync("session-1", entityId, null);
         var conversation = await storage.GetOrCreateConversationAsync(sessionId, TimeSpan.FromMinutes(5));
@@ -470,7 +473,7 @@ public class StorageTests
     [Test]
     public async Task DeleteEntityMemoriesAsync_IsIdempotent()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
 
         await storage.DeleteEntityMemoriesAsync(entityId);
@@ -487,7 +490,7 @@ public class StorageTests
     [Test]
     public async Task AddSemanticTriplesAsync_StoresTriples()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
 
         await storage.AddSemanticTriplesAsync(entityId, new[]
@@ -505,7 +508,7 @@ public class StorageTests
     [Test]
     public async Task AddProcessAttributesAsync_StoresAttributes()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var processId = await storage.GetOrCreateProcessAsync("workflow-1");
 
         await storage.AddProcessAttributesAsync(processId, new[]
@@ -523,7 +526,7 @@ public class StorageTests
     [Test]
     public async Task AddProcessAttributesAsync_IgnoresEmptyAttributes()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var processId = await storage.GetOrCreateProcessAsync("workflow-1");
 
         await storage.AddProcessAttributesAsync(processId, new[]
@@ -545,7 +548,7 @@ public class StorageTests
     [Test]
     public async Task UpdateConversationSummaryAsync_UpdatesSummary()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
         await storage.UpdateConversationSummaryAsync(conversation.Id, "This is a summary");
@@ -558,7 +561,7 @@ public class StorageTests
     [Test]
     public async Task UpdateConversationSummaryAsync_UpdatesTimestamp()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
         var originalUpdatedAt = conversation.UpdatedAt;
 
@@ -577,7 +580,7 @@ public class StorageTests
     [Test]
     public async Task AddFactsAsync_AssignsUniqueIds()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
 
         var stored = await storage.AddFactsAsync(entityId, new[]
@@ -593,7 +596,7 @@ public class StorageTests
     [Test]
     public async Task AddFactsAsync_PreservesConversationId()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(5));
 
@@ -608,7 +611,7 @@ public class StorageTests
     [Test]
     public async Task AddFactsAsync_AssignsCreatedAtWhenNotProvided()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
 
         var stored = await storage.AddFactsAsync(entityId, new[]
@@ -622,7 +625,7 @@ public class StorageTests
     [Test]
     public async Task AddFactsAsync_PreservesProvidedCreatedAt()
     {
-        var storage = new InMemoryStorage();
+        var storage = CreateStorage();
         var entityId = await storage.GetOrCreateEntityAsync("entity-1");
         var createdAt = DateTimeOffset.UtcNow.AddDays(-1);
 
@@ -635,4 +638,12 @@ public class StorageTests
     }
 
     #endregion
+}
+
+/// <summary>
+/// Contract tests for the reference <see cref="InMemoryStorage"/> implementation.
+/// </summary>
+public sealed class InMemoryStorageTests : StorageContractTests
+{
+    protected override IStorage CreateStorage() => new InMemoryStorage();
 }

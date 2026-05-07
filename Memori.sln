@@ -13,15 +13,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.gitattributes = .gitattributes
 		.gitignore = .gitignore
 		.mcp.json = .mcp.json
+		AGENTS.md = AGENTS.md
+		ARCHITECTURE.md = ARCHITECTURE.md
+		GETTING-STARTED.md = GETTING-STARTED.md
 		README.md = README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{741452AD-6E6C-4EBF-A07A-0D7F5B3E9A1F}"
-	ProjectSection(SolutionItems) = preProject
-		docs\FOLLOWUP.md = docs\FOLLOWUP.md
-		docs\IDEA.md = docs\IDEA.md
-		docs\PHASE2.md = docs\PHASE2.md
-		docs\SOURCE.md = docs\SOURCE.md
 	EndProjectSection
 EndProject
 Global
