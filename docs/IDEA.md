@@ -73,7 +73,7 @@ Library ships only:
 
 Planned future ecosystem packages may provide:
 
-* Microsoft Vector Data Extensions adapters
+* Microsoft Vector Data Extensions adapters (IStorage implementations using VectorStore backends for production vector databases)
 * Cosmos/SQL providers
 * Other persistence providers
 

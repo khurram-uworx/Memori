@@ -1,3 +1,5 @@
+using System.Numerics.Tensors;
+
 namespace Memori.Search;
 
 /// <summary>
@@ -15,13 +17,13 @@ public static class Similarity
 
         // Use TensorPrimitives for optimized cosine similarity
         if (right is float[] arr)
-            return System.Numerics.Tensors.TensorPrimitives.CosineSimilarity(left, arr);
+            return TensorPrimitives.CosineSimilarity(left, arr);
 
         // Fallback: copy to array for span access
         var tmp = new float[right.Count];
         for (int i = 0; i < right.Count; i++)
             tmp[i] = right[i];
-        return System.Numerics.Tensors.TensorPrimitives.CosineSimilarity(left, tmp);
+        return TensorPrimitives.CosineSimilarity(left, tmp);
     }
 
     /// <summary>
