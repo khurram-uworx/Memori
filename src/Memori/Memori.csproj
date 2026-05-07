@@ -4,22 +4,28 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Authors>Memori Contributors</Authors>
     <Company>uWorx</Company>
-    <Description>Memori adds a persistent, searchable memory layer to your AI app</Description>
+    <Description>Memori adds a persistent, searchable memory layer to your AI app: capture conversations, recall relevant facts, and inject context into prompts — without coupling to a specific database or LLM provider.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/khurram-uworx/Memori</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageProjectUrl>https://github.com/khurram-uworx/Memori</PackageProjectUrl>
-    <PackageTags>ai;memory;agents;llm;Microsoft.Extensions.AI</PackageTags>
+    <PackageTags>ai;memory;agents;llm;semantic-memory;chat;conversation;Microsoft.Extensions.AI;vector-search</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright (c) 2026 uWorx</Copyright>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.2" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />

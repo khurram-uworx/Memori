@@ -1,5 +1,7 @@
 using Memori.Abstractions;
 using Memori.Models;
+using Memori.Summarization;
+using Memori.Versioning;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
 
@@ -14,6 +16,8 @@ public sealed class AugmentationService
     readonly VectorStoreCollection<string, MemoryFactRecord> factCollection;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
     readonly IAugmentationClient augmentationClient;
+    readonly VersioningService? versioningService;
+    readonly IThreadSummarizer? threadSummarizer;
     readonly MemoriOptions options;
     readonly object gate = new();
     readonly List<Task> pendingTasks = [];
@@ -26,12 +30,16 @@ public sealed class AugmentationService
         VectorStoreCollection<string, MemoryFactRecord> factCollection,
         IAugmentationClient augmentationClient,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
-        MemoriOptions? options = null)
+        MemoriOptions? options = null,
+        VersioningService? versioningService = null,
+        IThreadSummarizer? threadSummarizer = null)
     {
         this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
         this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
         this.augmentationClient = augmentationClient ?? throw new ArgumentNullException(nameof(augmentationClient));
         this.embeddingGenerator = embeddingGenerator;
+        this.versioningService = versioningService;
+        this.threadSummarizer = threadSummarizer;
         this.options = options ?? new MemoriOptions();
         this.options.Validate();
     }
@@ -113,6 +121,34 @@ public sealed class AugmentationService
 
         if (!string.IsNullOrWhiteSpace(input.ProcessId) && result.ProcessAttributes is { Count: > 0 })
             await upsertAttributesAsync(input.ProcessId, result.ProcessAttributes, cancellationToken).ConfigureAwait(false);
+
+        if (threadSummarizer is not null && input.Messages.Count > 0)
+        {
+            try
+            {
+                var previousSummary = input.ConversationSummary;
+                var summaryText = !string.IsNullOrWhiteSpace(previousSummary)
+                    ? await threadSummarizer.SummarizeAsync(input.Messages, previousSummary, cancellationToken).ConfigureAwait(false)
+                    : await threadSummarizer.SummarizeAsync(input.Messages, cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(summaryText))
+                {
+                    var summaryRecord = new MemoryFactRecord
+                    {
+                        Id = Guid.NewGuid().ToString("N"),
+                        EntityId = input.EntityId,
+                        Content = summaryText,
+                        MemoryType = "summary",
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    await factCollection.UpsertAsync(summaryRecord, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+                // Summarizer errors must not break the augmentation pipeline
+            }
+        }
     }
 
     async ValueTask<IReadOnlyList<NewMemoryFact>> maybeEmbedFactsAsync(
@@ -150,14 +186,29 @@ public sealed class AugmentationService
         string? conversationId,
         CancellationToken cancellationToken)
     {
-        var records = new List<MemoryFactRecord>(facts.Count);
         foreach (var fact in facts)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            MemoryFactRecord? existingRecord = null;
+
+            if (versioningService is not null)
+            {
+                await foreach (var match in factCollection.GetAsync(
+                    r => r.EntityId == entityId && r.Content == fact.Content,
+                    1,
+                    cancellationToken: cancellationToken).ConfigureAwait(false))
+                {
+                    existingRecord = match;
+                    break;
+                }
+            }
+
+            var expectedVersion = existingRecord?.Version ?? 0;
+
             var record = new MemoryFactRecord
             {
-                Id = Guid.NewGuid().ToString("N"),
+                Id = existingRecord?.Id ?? Guid.NewGuid().ToString("N"),
                 EntityId = entityId,
                 Content = fact.Content,
                 Embedding = fact.Embedding is not null ? new ReadOnlyMemory<float>(fact.Embedding.ToArray()) : ReadOnlyMemory<float>.Empty,
@@ -168,12 +219,13 @@ public sealed class AugmentationService
                 Summaries = fact.Summaries.ToArray()
             };
 
-            records.Add(record);
-        }
-
-        foreach (var record in records)
-        {
-            await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
+            if (versioningService is not null)
+            {
+                var resolution = versioningService.ResolveConflict(record, existingRecord, expectedVersion);
+                await factCollection.UpsertAsync(resolution.ResolvedRecord, cancellationToken).ConfigureAwait(false);
+            }
+            else
+                await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -203,9 +255,7 @@ public sealed class AugmentationService
         }
 
         foreach (var record in records)
-        {
             await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     async ValueTask upsertAttributesAsync(
@@ -237,8 +287,6 @@ public sealed class AugmentationService
         }
 
         foreach (var record in records)
-        {
             await factCollection.UpsertAsync(record, cancellationToken).ConfigureAwait(false);
-        }
     }
 }

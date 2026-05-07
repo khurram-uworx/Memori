@@ -1,11 +1,16 @@
 using Memori.Abstractions;
+using Memori.Management;
 using Memori.Models;
+using Memori.Search;
 using Memori.Storage;
+using Memori.Summarization;
+using Memori.Versioning;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
+using System.Linq.Expressions;
 
 namespace Memori.Tests;
 
@@ -449,6 +454,109 @@ public class MemoriFacadeTests
     }
 
     [Test]
+    public void AddMemori_ResolvesVersioningService()
+    {
+        var services = new ServiceCollection();
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        var svc = provider.GetRequiredService<VersioningService>();
+        Assert.That(svc, Is.Not.Null);
+    }
+
+    [Test]
+    public void AddMemori_ResolvesIMemoryManagementService()
+    {
+        var services = new ServiceCollection();
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        var svc = provider.GetRequiredService<IMemoryManagementService>();
+        Assert.That(svc, Is.Not.Null);
+        Assert.That(svc, Is.InstanceOf<MemoryManagementService>());
+    }
+
+    [Test]
+    public void AddMemori_DoesNotResolveIThreadSummarizer_WhenNoIChatClient()
+    {
+        var services = new ServiceCollection();
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        var svc = provider.GetService<IThreadSummarizer>();
+        Assert.That(svc, Is.Null);
+    }
+
+    [Test]
+    public void AddMemori_ResolvesIThreadSummarizer_WhenIChatClientIsRegistered()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IChatClient>(new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok"))));
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        var svc = provider.GetRequiredService<IThreadSummarizer>();
+        Assert.That(svc, Is.Not.Null);
+        Assert.That(svc, Is.InstanceOf<ChatClientThreadSummarizer>());
+    }
+
+    [Test]
+    public void AddMemori_WithCustomMemoryManagementFactory_UsesProvidedService()
+    {
+        var services = new ServiceCollection();
+        var custom = new MemoryManagementService(
+            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
+        services.AddSingleton<IMemoryManagementService>(custom);
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<IMemoryManagementService>(), Is.SameAs(custom));
+    }
+
+    [Test]
+    public void AddMemori_WithCustomVersioningFactory_UsesProvidedService()
+    {
+        var services = new ServiceCollection();
+        var custom = new VersioningService(ConflictResolutionStrategy.Merge);
+        services.AddSingleton(custom);
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        var resolved = provider.GetRequiredService<VersioningService>();
+        Assert.That(resolved, Is.SameAs(custom));
+    }
+
+    [Test]
+    public void AddMemori_WithCustomThreadSummarizerFactory_UsesProvidedService()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IChatClient>(new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok"))));
+        var custom = new ChatClientThreadSummarizer(
+            new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok"))));
+        services.AddSingleton<IThreadSummarizer>(custom);
+        services.AddMemori();
+        var provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<IThreadSummarizer>(), Is.SameAs(custom));
+    }
+
+    [Test]
+    public void AddMemori_WithTier3FactoriesOverload_ResolvesCorrectly()
+    {
+        var services = new ServiceCollection();
+        services.AddMemori(
+            memoryManagementFactory: sp => new MemoryManagementService(
+                sp.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>()),
+            threadSummarizerFactory: null,
+            versioningServiceFactory: sp => new VersioningService(ConflictResolutionStrategy.Merge));
+
+        var provider = services.BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<IMemoryManagementService>(), Is.Not.Null);
+        Assert.That(provider.GetRequiredService<VersioningService>(), Is.Not.Null);
+    }
+
+    [Test]
     public async Task UseMemori_WithCustomFactories_UsesConfiguredMemori()
     {
         var conversationStorage = new InMemoryConversationStorage();
@@ -486,6 +594,203 @@ public class MemoriFacadeTests
 
         Assert.That(factoryCalled, Is.True);
         Assert.That(inner.LastMessages.Single().Role, Is.EqualTo(ChatRole.User));
+    }
+
+    [Test]
+    public void AddMemori_WithCompositeCollectionFactory_UsesProvidedCollection()
+    {
+        var services = new ServiceCollection();
+        var vectorStore1 = new InMemoryVectorStore();
+        var vectorStore2 = new InMemoryVectorStore();
+        var collection1 = vectorStore1.GetCollection<string, MemoryFactRecord>("primary");
+        var collection2 = vectorStore2.GetCollection<string, MemoryFactRecord>("secondary");
+
+        services.AddMemori(
+            _ => new CompositeMemoryCollection([collection1, collection2]),
+            options => { options.RecallRelevanceThreshold = 0; });
+
+        var provider = services.BuildServiceProvider();
+
+        var resolvedCollection = provider.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>();
+        Assert.That(resolvedCollection, Is.InstanceOf<CompositeMemoryCollection>());
+
+        var memori = provider.CreateMemori();
+        Assert.That(memori, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task MemoriFacade_MemoryManagementMethods_WorkWhenServiceIsConfigured()
+    {
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+        var conversationStorage = new InMemoryConversationStorage();
+        var management = new MemoryManagementService(factCollection);
+        var memori = new Memori(
+            conversationStorage,
+            factCollection,
+            memoryManagement: management);
+
+        memori.Attribution("entity-1");
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = "fact-1",
+            EntityId = "entity-1",
+            Content = "test memory",
+            MemoryType = "preference"
+        });
+
+        var count = await memori.GetMemoryCountAsync();
+        Assert.That(count, Is.EqualTo(1));
+
+        var listed = await memori.ListMemoriesAsync();
+        Assert.That(listed, Has.Count.EqualTo(1));
+        Assert.That(listed[0].Content, Is.EqualTo("test memory"));
+
+        var searched = await memori.SearchMemoriesAsync("test");
+        Assert.That(searched, Has.Count.EqualTo(1));
+
+        var deleted = await memori.SoftDeleteMemoryAsync("fact-1");
+        Assert.That(deleted, Is.True);
+
+        var afterDelete = await memori.GetMemoryCountAsync();
+        Assert.That(afterDelete, Is.EqualTo(0));
+
+        var restored = await memori.RestoreMemoryAsync("fact-1");
+        Assert.That(restored, Is.True);
+
+        var afterRestore = await memori.GetMemoryCountAsync();
+        Assert.That(afterRestore, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task MemoriFacade_MemoryManagementMethods_ThrowWhenServiceNotConfigured()
+    {
+        var memori = TestMemoriFactory.Create();
+        memori.Attribution("entity-1");
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await memori.ListMemoriesAsync());
+        Assert.That(ex!.Message, Does.Contain("IMemoryManagementService is not configured"));
+    }
+
+    [Test]
+    public async Task MemoriFacade_MemoryManagementMethods_ThrowWhenNoAttribution()
+    {
+        var management = new MemoryManagementService(
+            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
+        var memori = new Memori(
+            new InMemoryConversationStorage(),
+            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"),
+            memoryManagement: management);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await memori.ListMemoriesAsync());
+        Assert.That(ex!.Message, Does.Contain("Attribution is required"));
+    }
+
+    [Test]
+    public void CaptureAsync_WithNullMessages_Throws()
+    {
+        var memori = TestMemoriFactory.Create();
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        Assert.That(async () => await memori.CaptureAsync(null!), Throws.ArgumentNullException);
+    }
+
+    [Test]
+    public async Task CaptureAsync_WithEmptyMessages_DoesNothing()
+    {
+        var memori = TestMemoriFactory.Create();
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        await memori.CaptureAsync([]);
+
+        var conversationStorage = GetConversationStorage(memori);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        Assert.That(messages, Is.Empty);
+    }
+
+    [Test]
+    public void RecallAsync_WithNullQuery_Throws()
+    {
+        var memori = TestMemoriFactory.Create();
+        memori.Attribution("entity-1");
+
+        Assert.That(async () => await memori.RecallAsync(null!), Throws.ArgumentNullException);
+    }
+
+    [Test]
+    public async Task RecallAsync_WhenNoAttribution_ReturnsEmpty()
+    {
+        var memori = TestMemoriFactory.Create();
+
+        var results = await memori.RecallAsync("anything");
+
+        Assert.That(results, Is.Empty);
+    }
+
+    [Test]
+    public void DeleteEntityMemoriesAsync_WhenNoAttribution_DoesNotThrow()
+    {
+        var memori = TestMemoriFactory.Create();
+
+        Assert.That(async () => await memori.DeleteEntityMemoriesAsync(), Throws.Nothing);
+    }
+
+    [Test]
+    public void NewSession_ReturnsNonEmptyString()
+    {
+        var memori = TestMemoriFactory.Create();
+
+        var session = memori.NewSession();
+
+        Assert.That(session, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public void SetSession_WithEmptyString_Throws()
+    {
+        var memori = TestMemoriFactory.Create();
+
+        Assert.That(() => memori.SetSession(""), Throws.ArgumentException);
+        Assert.That(() => memori.SetSession("   "), Throws.ArgumentException);
+    }
+
+    [Test]
+    public void SetScope_WithEmptyString_Throws()
+    {
+        var memori = TestMemoriFactory.Create();
+
+        Assert.That(() => memori.SetScope(""), Throws.ArgumentException);
+        Assert.That(() => memori.SetScope("   "), Throws.ArgumentException);
+    }
+
+    [Test]
+    public async Task CaptureAsync_WithStripSystemMessages_AppliesFilter()
+    {
+        var memori = TestMemoriFactory.Create(options: new MemoriOptions
+        {
+            StripSystemMessagesOnCapture = true,
+        });
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        await memori.CaptureAsync([
+            new ConversationMessage(ConversationRoles.System, "system instruction"),
+            new ConversationMessage(ConversationRoles.User, "user message"),
+            new ConversationMessage(ConversationRoles.Assistant, "assistant response"),
+        ]);
+
+        var conversationStorage = GetConversationStorage(memori);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+
+        Assert.That(messages.Any(m => m.Role == ConversationRoles.System), Is.False);
+        Assert.That(messages.Any(m => m.Content == "user message"), Is.True);
+        Assert.That(messages.Any(m => m.Content == "assistant response"), Is.True);
     }
 
     static IConversationStorage GetConversationStorage(Memori memori)

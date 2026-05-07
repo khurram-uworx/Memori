@@ -42,6 +42,7 @@ The durable boundary for relational/ordered operations. Storage providers should
 - Get-or-create methods must be idempotent for the same logical identifier.
 - Each operation should be internally atomic from the caller's point of view. The interface intentionally does not expose transactions.
 - Conversation history is durable history. Fact deletion does not affect captured conversation messages.
+- All entity, process, and session operations accept an optional `scope` parameter for workspace or multi-tenant isolation. When set, scope acts as a partition key that restricts subsequent recall and management operations.
 
 **Domain Objects:**
 
@@ -212,7 +213,25 @@ For durable production stores, consider deriving a stable key from entity id, no
 
 ### IMemoryRanker
 
-`IMemoryRanker` is the abstraction for ranking memory candidates before they are returned to the caller. The default implementation (`DefaultMemoryRanker`) combines cosine similarity and lexical scoring. Hosts can supply a custom ranker through DI to apply domain-specific ranking logic without replacing the full search service.
+`IMemoryRanker` is the public extension point for ranking memory candidates before they are returned to the caller. The interface defines a single method `double Rank(RecallResult result, DateTimeOffset now)`.
+
+The default implementation `DefaultMemoryRanker` combines three signals into a final score:
+- Base similarity or rank score from the vector or lexical search.
+- Confidence boost (0–1, weighted at 20%).
+- Recency boost that decays logarithmically with age (`0.1 / (1 + ageInDays)`).
+
+Hosts can supply a custom ranker through DI to apply domain-specific ranking logic (e.g., boosting recent interactions, filtering by content category) without replacing the full search service.
+
+### CompositeMemoryCollection
+
+`CompositeMemoryCollection` is a `VectorStoreCollection<string, MemoryFactRecord>` that transparently wraps multiple backend collections. It enables multi-provider setups such as hybrid in-memory + production vector database.
+
+- **Reads**: queries are fanned out to all backends in parallel. Results are deduplicated by record key and merged via `IDistributedRanker` for a unified ranked list.
+- **Writes**: configurable via `CompositeWriteStrategy` — either all backends (`All`) or only the primary (`PrimaryOnly`).
+- **Configuration**: `CompositeMemoryCollectionOptions` controls max concurrency, write strategy, ranking strategy, per-backend source weights, and the composite collection name.
+- **Graceful degradation**: per-backend failures are isolated; remaining backends still return results.
+
+Register a `CompositeMemoryCollection` through DI as the single `VectorStoreCollection<string, MemoryFactRecord>` that downstream services (search, management) consume.
 
 ## IChatClient Middleware
 
@@ -241,6 +260,70 @@ Prompt injection placement is configurable:
 - **Sessions** group capture history. `GetOrCreateConversationAsync` uses `SessionTimeout` to decide whether to continue an existing conversation or start a new one.
 - Recall and delete operations are always scoped to the current attribution entity.
 - Sessions only affect capture grouping and conversation history, not recall scope.
+
+## Tier 3 Features
+
+Tier 3 adds enterprise-oriented features on top of the core capture/recall/augmentation pipeline. These are opt-in components that build on the existing storage and search abstractions.
+
+### Scope Isolation
+
+Scope is a first-class concept for workspace or multi-tenant isolation. Every `MemoryFactRecord` carries an optional `Scope` string. When scope is active:
+
+- Recall filters results to only return facts matching the current scope.
+- Memory management operations (list, search, delete) respect scope boundaries.
+- Conversation storage operations (entity, process, session) accept an optional scope parameter.
+
+On the `Memori` facade, scope is controlled via `SetScope(string)` and `ClearScope()`. The current scope is accessible through `CurrentScope`. When scope is null, recall and management operate across all scopes (tenant-unaware mode).
+
+Scope applies only to memory facts and conversation metadata — it does not control access to the underlying `IChatClient` or `IEmbeddingGenerator`.
+
+### Versioning and Conflict Resolution
+
+`VersioningService` provides optimistic concurrency control for `MemoryFactRecord` writes. Each record carries:
+
+- `Version` — monotonic version number incremented on each update.
+- `PreviousVersionId` — optional link to the prior version for audit trails.
+- `IsDeleted` — soft-delete flag.
+
+Conflict detection compares the caller's expected version against the current stored version. When a mismatch is detected, resolution follows a configurable strategy:
+
+- `LastWriteWins` (default) — the most recent write succeeds unconditionally. High throughput, accepts occasional data loss.
+- `Merge` — when content differs, conflicting text is combined with a semicolon delimiter.
+- `Manual` — the conflict is flagged for human or external resolution; the new version is stored with a conflict marker.
+
+The service is available for production database drivers where concurrent writes are a real concern. Wire it through `AugmentationService` when versioned writes are required.
+
+### Thread Summarization
+
+`IThreadSummarizer` is the extension point for generating conversation thread summaries. It defines two operations:
+
+- Initial summarization from a message list.
+- Rolling summarization that builds on a previous summary for continuity.
+
+`ChatClientThreadSummarizer` is the default implementation. It leverages `IChatClient` to generate summaries by sending conversation messages with a system prompt. Configuration is handled through `ThreadSummarizationOptions`:
+
+- `MaxMessagesPerSummary` (default: 50) — caps messages sent per summarization request.
+- `IncludeTimestamps` — controls whether timestamps are prepended to messages.
+- `SummaryMemoryType` (default: `"summary"`) — the `MemoryType` value for stored summary records.
+
+Summaries can be stored as `MemoryFactRecord` entries and participate in recall. Integration into the augmentation pipeline is opt-in.
+
+### Memory Management
+
+`IMemoryManagementService` provides a user-facing API for inspecting, searching, editing, and deleting durable memories. It is designed to back settings pages, privacy dashboards, admin panels, or any interface where users need visibility into what the AI "remembers".
+
+| Method | Description |
+|---|---|
+| `ListMemoriesAsync` | Paginated listing of all memories for an entity. |
+| `SearchMemoriesAsync` | Full-text or vector search with optional type, scope, and soft-delete filters. |
+| `GetMemoryAsync` | Single record lookup by memory ID. |
+| `UpdateMemoryAsync` | Edit memory content. |
+| `SoftDeleteMemoryAsync` | Logical delete (sets `IsDeleted = true`). |
+| `HardDeleteMemoryAsync` | Physical delete from the backing store. |
+| `RestoreMemoryAsync` | Undo a soft delete. |
+| `GetMemoryCountAsync` | Total memory count for an entity. |
+
+`MemoryManagementService` is the default implementation backed by a `VectorStoreCollection<string, MemoryFactRecord>`. The `Memori` facade exposes convenience methods (`ListMemoriesAsync`, `SearchMemoriesAsync`, etc.) that auto-scope to the current attribution entity when the management service is registered.
 
 ## Extension Package Boundaries
 

@@ -18,6 +18,10 @@ dotnet add package Memori
 - `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
 - A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
 - `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
+- Scope isolation for multi-tenant memory
+- Versioning and conflict resolution (last-write-wins, merge, manual)
+- Thread summarization via `ChatClientThreadSummarizer`
+- Memory management APIs for user-facing inspection, search, edit, soft-delete, and restore
 
 ## Basic Example
 
@@ -81,6 +85,15 @@ var promptContext = memori.BuildPromptContext(recalled);
 Console.WriteLine(promptContext.RenderedText);
 ```
 
+## Scope Isolation
+
+```csharp
+memori.Attribution("user_123");
+memori.SetScope("workspace-a");
+var results = await memori.RecallAsync("coffee");
+memori.ClearScope();
+```
+
 ## Microsoft.Extensions.AI Middleware
 
 ```csharp
@@ -130,16 +143,42 @@ Augmentation extracts structured memory (facts, semantic triples, process attrib
 - `PromptAugmentationClient`: uses an `IChatClient` to extract structured JSON output.
 - Implement `IAugmentationClient` for custom extraction logic.
 
+## Versioning
+
+```csharp
+var versioning = new VersioningService(ConflictResolutionStrategy.LastWriteWins);
+var resolution = versioning.ResolveConflict(incoming, existing, expectedVersion: 1);
+```
+
+Supports last-write-wins, merge, and manual resolution strategies with audit trail.
+
+## Thread Summarization
+
+```csharp
+var summarizer = new ChatClientThreadSummarizer(chatClient);
+var summary = await summarizer.SummarizeAsync(messages);
+var updated = await summarizer.SummarizeAsync(newMessages, previousSummary);
+```
+
+## Memory Management
+
+```csharp
+var management = serviceProvider.GetRequiredService<IMemoryManagementService>();
+var memories = await management.ListMemoriesAsync("entity-1");
+await management.SoftDeleteMemoryAsync("fact-id");
+await management.RestoreMemoryAsync("fact-id");
+await management.HardDeleteMemoryAsync("fact-id");
+```
+
 ## Learn More
 
-- Overview and full feature surface: [README.md](https://github.com/MemoriLabs/Memori/blob/main/README.md)
-- Developer guide: [GETTING-STARTED.md](https://github.com/MemoriLabs/Memori/blob/main/GETTING-STARTED.md)
-- Architecture and design notes: [ARCHITECTURE.md](https://github.com/MemoriLabs/Memori/blob/main/ARCHITECTURE.md)
-- Repository: [github.com/MemoriLabs/Memori](https://github.com/MemoriLabs/Memori)
+- Full feature overview: [README.md](README.md)
+- Developer guide: [GETTING-STARTED.md](GETTING-STARTED.md)
+- Architecture and design notes: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Status
 
-Early development. Phase 1 (core primitives, `IChatClient` middleware) and Phase 2 Tier 1 (VectorStore foundation) are complete. No first-party database integrations are included in this package — implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
+All Phase 1 and Phase 2 features are implemented: core primitives, storage split, distributed ranking, composite collection, scope isolation, versioning, thread summarization, and memory management. 211 NUnit tests. No first-party database integrations — implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
 
 ## License
 

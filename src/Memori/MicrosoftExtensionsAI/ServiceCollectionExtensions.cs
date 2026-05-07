@@ -1,8 +1,11 @@
 using Memori.Abstractions;
 using Memori.Augmentation;
+using Memori.Management;
 using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
+using Memori.Summarization;
+using Memori.Versioning;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +24,6 @@ public static class ServiceCollectionExtensions
         Action<MemoriOptions>? configureOptions)
     {
         if (configureOptions is not null)
-        {
             services.AddSingleton(sp =>
             {
                 var options = new MemoriOptions();
@@ -29,7 +31,6 @@ public static class ServiceCollectionExtensions
                 options.Validate();
                 return options;
             });
-        }
         else
             services.AddSingleton(new MemoriOptions());
 
@@ -66,7 +67,18 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>(),
             sp.GetRequiredService<MemoriOptions>(),
             augmentationClient: sp.GetRequiredService<IAugmentationClient>(),
-            embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>()));
+            embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>(),
+            memoryManagement: sp.GetService<IMemoryManagementService>()));
+
+        services.TryAddSingleton<VersioningService>();
+        services.TryAddSingleton<IMemoryManagementService, MemoryManagementService>();
+
+        if (services.Any(d => d.ServiceType == typeof(IChatClient)))
+            services.TryAddSingleton<IThreadSummarizer>(sp =>
+            {
+                var chatClient = sp.GetRequiredService<IChatClient>();
+                return new ChatClientThreadSummarizer(chatClient);
+            });
 
         return services;
     }
@@ -201,6 +213,48 @@ public static class ServiceCollectionExtensions
 
         addOptions(services, configureOptions);
         services.AddSingleton(sp => augmentationClientFactory(sp));
+        return addCoreServices(services);
+    }
+
+    /// <summary>
+    /// Registers Memori services with custom factories for Tier 3 services.
+    /// </summary>
+    public static IServiceCollection AddMemori(
+        this IServiceCollection services,
+        Func<IServiceProvider, IMemoryManagementService>? memoryManagementFactory,
+        Func<IServiceProvider, IThreadSummarizer>? threadSummarizerFactory = null,
+        Func<IServiceProvider, VersioningService>? versioningServiceFactory = null,
+        Action<MemoriOptions>? configureOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        addOptions(services, configureOptions);
+
+        if (memoryManagementFactory is not null)
+            services.AddSingleton(sp => memoryManagementFactory(sp));
+
+        if (threadSummarizerFactory is not null)
+            services.AddSingleton(sp => threadSummarizerFactory(sp));
+
+        if (versioningServiceFactory is not null)
+            services.AddSingleton(sp => versioningServiceFactory(sp));
+
+        return addCoreServices(services);
+    }
+
+    /// <summary>
+    /// Registers Memori services with a composite collection factory.
+    /// </summary>
+    public static IServiceCollection AddMemori(
+        this IServiceCollection services,
+        Func<IServiceProvider, CompositeMemoryCollection> compositeCollectionFactory,
+        Action<MemoriOptions>? configureOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(compositeCollectionFactory);
+
+        addOptions(services, configureOptions);
+        services.AddSingleton<VectorStoreCollection<string, MemoryFactRecord>>(sp => compositeCollectionFactory(sp));
         return addCoreServices(services);
     }
 
