@@ -1,6 +1,7 @@
 using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
+using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
 
 namespace Memori.Tests;
@@ -32,7 +33,7 @@ public class PromptContextFormattingTests
             PromptSummariesHeading = "Summaries:",
             RecallRelevanceThreshold = 0,
         };
-        var search = new MemorySearchService(new InMemoryStorage(), options: options);
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -57,7 +58,7 @@ public class PromptContextFormattingTests
     [Test]
     public void FormatPromptContext_MatchesStructuredRenderedText()
     {
-        var search = new MemorySearchService(new InMemoryStorage());
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
         var results = new[] { createResult() };
 
         var structured = search.BuildPromptContext(results);
@@ -79,7 +80,7 @@ public class PromptContextFormattingTests
             PromptSummariesHeading = "Memory summaries:",
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryStorage(), options: options);
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -98,7 +99,7 @@ public class PromptContextFormattingTests
         {
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryStorage(), options: options);
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 

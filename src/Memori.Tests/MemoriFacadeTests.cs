@@ -1,3 +1,4 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Memori.Storage;
@@ -13,8 +14,7 @@ public class MemoriFacadeTests
     [Test]
     public async Task CaptureAsync_WithNoAttribution_DoesNotWriteMessages()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var memori = TestMemoriFactory.Create();
         memori.SetSession("test-session");
 
         await memori.CaptureAsync(new[]
@@ -22,8 +22,10 @@ public class MemoriFacadeTests
             new ConversationMessage(ConversationRoles.User, "hello"),
         });
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        // Get conversation storage from memori's internal state
+        var conversationStorage = GetConversationStorage(memori);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages, Is.Empty);
     }
@@ -31,8 +33,7 @@ public class MemoriFacadeTests
     [Test]
     public async Task CaptureAsync_StripsSystemMessages_WhenConfigured()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage, new MemoriOptions { StripSystemMessagesOnCapture = true });
+        var memori = TestMemoriFactory.Create(options: new MemoriOptions { StripSystemMessagesOnCapture = true });
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -42,8 +43,9 @@ public class MemoriFacadeTests
             new ConversationMessage(ConversationRoles.User, "hello"),
         });
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversationStorage = GetConversationStorage(memori);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Select(message => message.Role), Is.EqualTo(new[] { ConversationRoles.User }));
     }
@@ -51,11 +53,19 @@ public class MemoriFacadeTests
     [Test]
     public async Task RecallAsync_UsesCurrentAttribution()
     {
-        var storage = new InMemoryStorage();
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, new[] { new NewMemoryFact("coffee is preferred", memoryType: "preference") });
+        var memori = TestMemoriFactory.Create();
+        var factCollection = GetFactCollection(memori);
+        var conversationStorage = GetConversationStorage(memori);
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = entityId,
+            Content = "coffee is preferred",
+            Embedding = new ReadOnlyMemory<float>(new float[1536]),
+            MemoryType = "preference"
+        });
 
-        var memori = new Memori(storage);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -68,10 +78,7 @@ public class MemoriFacadeTests
     [Test]
     public async Task WaitForAugmentationAsync_CompletesQueuedWork()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(
-            storage,
-            augmentationClient: new TestAugmentationClient());
+        var memori = TestMemoriFactory.Create(augmentationClient: new TestAugmentationClient());
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -83,16 +90,22 @@ public class MemoriFacadeTests
 
         await memori.WaitForAugmentationAsync();
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        var results = await storage.SearchFactsAsync(entityId, "hello", null, 10, 10);
+        var factCollection = GetFactCollection(memori);
+        var conversationStorage = GetConversationStorage(memori);
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
+        var factResults = new List<VectorSearchResult<MemoryFactRecord>>();
+        await foreach (var result in factCollection.SearchAsync(new ReadOnlyMemory<float>(new float[1536]), 10, new VectorSearchOptions<MemoryFactRecord> { Filter = r => r.EntityId == entityId }))
+        {
+            factResults.Add(result);
+        }
 
-        Assert.That(results, Is.Empty); // TODO: Once we have better semantic analyzer it should not be empty
+        Assert.That(factResults, Is.Empty); // TODO: Once we have better semantic analyzer it should not be empty
     }
 
     [Test]
     public void CurrentAttributionAndSessionId_ReflectLifecycleState()
     {
-        var memori = new Memori(new InMemoryStorage());
+        var memori = TestMemoriFactory.Create();
 
         Assert.That(memori.CurrentAttribution, Is.Null);
         Assert.That(memori.CurrentSessionId, Is.Null);
@@ -109,20 +122,27 @@ public class MemoriFacadeTests
     [Test]
     public async Task ClearAttribution_DisablesCaptureAndRecallUntilReset()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var memori = TestMemoriFactory.Create();
+        var factCollection = GetFactCollection(memori);
+        var conversationStorage = GetConversationStorage(memori);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("coffee")]);
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = entityId,
+            Content = "coffee",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        });
 
         memori.ClearAttribution();
 
         await memori.CaptureAsync([new ConversationMessage(ConversationRoles.User, "hello")]);
         var recall = await memori.RecallAsync("coffee");
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(memori.CurrentAttribution, Is.Null);
         Assert.That(recall, Is.Empty);
@@ -132,8 +152,8 @@ public class MemoriFacadeTests
     [Test]
     public async Task ClearSession_CausesNextCaptureToCreateNewSession()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var memori = TestMemoriFactory.Create();
+        var conversationStorage = GetConversationStorage(memori);
         memori.Attribution("entity-1");
         memori.SetSession("session-1");
 
@@ -147,10 +167,10 @@ public class MemoriFacadeTests
         Assert.That(memori.CurrentSessionId, Is.Not.Null);
         Assert.That(memori.CurrentSessionId, Is.Not.EqualTo("session-1"));
 
-        var originalConversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
-        var originalMessages = await storage.GetConversationMessagesAsync(originalConversation.Id);
-        var newConversation = await storage.GetOrCreateConversationAsync(memori.CurrentSessionId!, TimeSpan.FromMinutes(30));
-        var newMessages = await storage.GetConversationMessagesAsync(newConversation.Id);
+        var originalConversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
+        var originalMessages = await conversationStorage.GetConversationMessagesAsync(originalConversation.Id);
+        var newConversation = await conversationStorage.GetOrCreateConversationAsync(memori.CurrentSessionId!, TimeSpan.FromMinutes(30));
+        var newMessages = await conversationStorage.GetConversationMessagesAsync(newConversation.Id);
 
         Assert.That(originalMessages.Select(message => message.Content), Is.EqualTo(["first"]));
         Assert.That(newMessages.Select(message => message.Content), Is.EqualTo(["second"]));
@@ -159,8 +179,8 @@ public class MemoriFacadeTests
     [Test]
     public async Task ResumeSession_ReusesExternallyManagedSession()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var memori = TestMemoriFactory.Create();
+        var conversationStorage = GetConversationStorage(memori);
         memori.Attribution("entity-1");
         memori.ResumeSession("external-session");
 
@@ -169,8 +189,8 @@ public class MemoriFacadeTests
         memori.ResumeSession("external-session");
         await memori.CaptureAsync([new ConversationMessage(ConversationRoles.User, "second")]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("external-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("external-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(memori.CurrentSessionId, Is.EqualTo("external-session"));
         Assert.That(messages.Select(message => message.Content), Is.EqualTo(["first", "second"]));
@@ -179,13 +199,26 @@ public class MemoriFacadeTests
     [Test]
     public async Task ResumeSession_DoesNotChangeEntityScopedRecall()
     {
-        var storage = new InMemoryStorage();
-        var userOne = await storage.GetOrCreateEntityAsync("user-1");
-        var userTwo = await storage.GetOrCreateEntityAsync("user-2");
-        await storage.AddFactsAsync(userOne, [new NewMemoryFact("coffee")]);
-        await storage.AddFactsAsync(userTwo, [new NewMemoryFact("tea")]);
+        var memori = TestMemoriFactory.Create();
+        var factCollection = GetFactCollection(memori);
+        var conversationStorage = GetConversationStorage(memori);
+        var userOne = await conversationStorage.GetOrCreateEntityAsync("user-1");
+        var userTwo = await conversationStorage.GetOrCreateEntityAsync("user-2");
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = userOne,
+            Content = "coffee",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        });
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = userTwo,
+            Content = "tea",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        });
 
-        var memori = new Memori(storage);
         memori.Attribution("user-1");
         memori.ResumeSession("shared-session");
 
@@ -197,18 +230,16 @@ public class MemoriFacadeTests
     [Test]
     public async Task CaptureAsync_CreatesNewConversationAfterSessionTimeout()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(
-            storage,
-            new MemoriOptions { SessionTimeout = TimeSpan.FromMilliseconds(50) });
+        var memori = TestMemoriFactory.Create(options: new MemoriOptions { SessionTimeout = TimeSpan.FromMilliseconds(50) });
+        var conversationStorage = GetConversationStorage(memori);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
         await memori.CaptureAsync([new ConversationMessage(ConversationRoles.User, "first")]);
-        var first = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMilliseconds(50));
+        var first = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMilliseconds(50));
         await Task.Delay(75);
         await memori.CaptureAsync([new ConversationMessage(ConversationRoles.User, "second")]);
-        var second = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMilliseconds(50));
+        var second = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMilliseconds(50));
 
         Assert.That(second.Id, Is.Not.EqualTo(first.Id));
     }
@@ -217,17 +248,26 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithExplicitStorageAndNoEmbeddingGenerator_UsesLexicalFallback()
     {
         var services = new ServiceCollection();
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-        services.AddMemori(storage);
+        services.AddMemori(conversationStorage, factCollection);
         var provider = services.BuildServiceProvider();
 
         var memori = provider.GetRequiredService<Memori>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("coffee is preferred", memoryType: "preference")]);
+        var factRecord = new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "coffee is preferred",
+            Embedding = new ReadOnlyMemory<float>(new float[1536]),
+            MemoryType = "preference"
+        };
+        await factCollection.UpsertAsync(factRecord);
 
         var results = await memori.RecallAsync("coffee");
 
@@ -240,17 +280,26 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomStorageFactory_UsesProvidedStorage()
     {
         var services = new ServiceCollection();
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-        services.AddMemori(_ => storage);
+        services.AddMemori(conversationStorage, factCollection);
         var provider = services.BuildServiceProvider();
 
         var memori = provider.GetRequiredService<Memori>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("coffee is preferred", memoryType: "preference")]);
+        var factRecord = new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "coffee is preferred",
+            Embedding = new ReadOnlyMemory<float>(new float[1536]),
+            MemoryType = "preference"
+        };
+        await factCollection.UpsertAsync(factRecord);
 
         var results = await memori.RecallAsync("coffee");
 
@@ -262,10 +311,12 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomEmbeddingFactory_UsesProvidedGenerator()
     {
         var services = new ServiceCollection();
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var generator = new TrackingEmbeddingGenerator();
 
-        services.AddMemori(_ => storage);
+        services.AddMemori(conversationStorage, factCollection);
         services.AddMemori(_ => generator);
         var provider = services.BuildServiceProvider();
 
@@ -273,8 +324,14 @@ public class MemoriFacadeTests
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("coffee is preferred")]);
+        var factRecord = new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "coffee is preferred",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        };
+        await factCollection.UpsertAsync(factRecord);
 
         await memori.RecallAsync("coffee");
 
@@ -285,10 +342,12 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomAugmentationFactory_UsesProvidedClient()
     {
         var services = new ServiceCollection();
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var augmentation = new TrackingAugmentationClient();
 
-        services.AddMemori(_ => storage);
+        services.AddMemori(conversationStorage, factCollection);
         services.AddMemori(_ => augmentation);
         var provider = services.BuildServiceProvider();
 
@@ -310,12 +369,15 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCommonFactories_ResolvesCompleteGraphAndHonorsFactories()
     {
         var services = new ServiceCollection();
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var generator = new TrackingEmbeddingGenerator();
         var augmentation = new TrackingAugmentationClient();
 
         services.AddMemori(
-            _ => storage,
+            _ => conversationStorage,
+            _ => factCollection,
             _ => generator,
             _ => augmentation,
             options =>
@@ -327,7 +389,8 @@ public class MemoriFacadeTests
         var provider = services.BuildServiceProvider();
         var memori = provider.CreateMemori();
 
-        Assert.That(provider.GetRequiredService<IStorage>(), Is.SameAs(storage));
+        Assert.That(provider.GetRequiredService<IConversationStorage>(), Is.SameAs(conversationStorage));
+        Assert.That(provider.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>(), Is.SameAs(factCollection));
         Assert.That(provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(), Is.SameAs(generator));
         Assert.That(provider.GetRequiredService<IAugmentationClient>(), Is.SameAs(augmentation));
         Assert.That(provider.GetRequiredService<MemoriOptions>().SessionTimeout, Is.EqualTo(TimeSpan.FromMinutes(7)));
@@ -335,8 +398,14 @@ public class MemoriFacadeTests
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("coffee is preferred")]);
+        var factRecord = new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "coffee is preferred",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        };
+        await factCollection.UpsertAsync(factRecord);
         await memori.RecallAsync("coffee");
 
         await memori.CaptureAsync([
@@ -382,7 +451,9 @@ public class MemoriFacadeTests
     [Test]
     public async Task UseMemori_WithCustomFactories_UsesConfiguredMemori()
     {
-        var storage = new InMemoryStorage();
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var factoryCalled = false;
         var builder = new ChatClientBuilder(inner).UseMemori(_ =>
@@ -393,7 +464,7 @@ public class MemoriFacadeTests
                 PromptContextTagName = "custom_context",
                 RecallRelevanceThreshold = 0,
             };
-            var memori = new Memori(storage, options);
+            var memori = new Memori(conversationStorage, factCollection, options);
             memori.Attribution("entity-1");
             memori.SetSession("test-session");
             return memori;
@@ -402,13 +473,31 @@ public class MemoriFacadeTests
         var provider = new ServiceCollection().BuildServiceProvider();
         var client = builder.Build(provider);
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(entityId, [new NewMemoryFact("The user lives in Karachi.")]);
+        var factRecord = new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "The user lives in Karachi.",
+            Embedding = new ReadOnlyMemory<float>(new float[1536])
+        };
+        await factCollection.UpsertAsync(factRecord);
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Where do I live?")]);
 
         Assert.That(factoryCalled, Is.True);
         Assert.That(inner.LastMessages.Single().Role, Is.EqualTo(ChatRole.User));
+    }
+
+    static IConversationStorage GetConversationStorage(Memori memori)
+    {
+        var field = typeof(Memori).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (IConversationStorage)field!.GetValue(memori)!;
+    }
+
+    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(Memori memori)
+    {
+        var field = typeof(Memori).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (VectorStoreCollection<string, MemoryFactRecord>)field!.GetValue(memori)!;
     }
 
     sealed class TrackingEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
