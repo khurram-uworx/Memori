@@ -13,23 +13,29 @@ namespace Memori.Storage;
 /// </remarks>
 public sealed class InMemoryConversationStorage : IConversationStorage
 {
-    sealed class EntityState(string id)
+    sealed class EntityState(string id, string? scope)
     {
         public string Id { get; } = id;
+
+        public string? Scope { get; } = scope;
     }
 
-    sealed class ProcessState(string id)
+    sealed class ProcessState(string id, string? scope)
     {
         public string Id { get; } = id;
+
+        public string? Scope { get; } = scope;
     }
 
-    sealed class SessionState(string id, string? entityId, string? processId)
+    sealed class SessionState(string id, string? entityId, string? processId, string? scope)
     {
         public string Id { get; } = id;
 
         public string? EntityId { get; set; } = entityId;
 
         public string? ProcessId { get; set; } = processId;
+
+        public string? Scope { get; } = scope;
 
         public List<string> ConversationIds { get; } = [];
     }
@@ -74,6 +80,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
 
     /// <inheritdoc />
     public ValueTask<string> GetOrCreateEntityAsync(string externalId,
+        string? scope = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -82,7 +89,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
         lock (gate)
         {
             if (!entities.ContainsKey(id))
-                entities[id] = new EntityState(id);
+                entities[id] = new EntityState(id, scope);
 
             return ValueTask.FromResult(id);
         }
@@ -90,6 +97,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
 
     /// <inheritdoc />
     public ValueTask<string> GetOrCreateProcessAsync(string externalId,
+        string? scope = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -98,7 +106,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
         lock (gate)
         {
             if (!processes.ContainsKey(id))
-                processes[id] = new ProcessState(id);
+                processes[id] = new ProcessState(id, scope);
 
             return ValueTask.FromResult(id);
         }
@@ -106,6 +114,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
 
     /// <inheritdoc />
     public ValueTask<string> GetOrCreateSessionAsync(string sessionId, string? entityId, string? processId,
+        string? scope = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -115,7 +124,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
         {
             if (!sessions.TryGetValue(id, out var session))
             {
-                session = new SessionState(id, entityId, processId);
+                session = new SessionState(id, entityId, processId, scope);
                 sessions[id] = session;
             }
             else
@@ -142,7 +151,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
         {
             if (!sessions.TryGetValue(id, out var session))
             {
-                session = new SessionState(id, entityId: null, processId: null);
+                session = new SessionState(id, entityId: null, processId: null, scope: null);
                 sessions[id] = session;
             }
 

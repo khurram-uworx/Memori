@@ -1,8 +1,9 @@
-using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Text;
 
 namespace Memori.Search;
@@ -113,13 +114,24 @@ public sealed class MemorySearchService
         return $"{options.PromptSummaryBullet.Trim()} {timestamp}{summary.Content}";
     }
 
+    static Expression<Func<MemoryFactRecord, bool>>? buildRecallFilter(
+        string entityId,
+        string? scope)
+    {
+        if (scope is null)
+            return r => r.EntityId == entityId && !r.IsDeleted;
+
+        return r => r.EntityId == entityId && r.Scope == scope && !r.IsDeleted;
+    }
+
     /// <summary>
-    /// Recalls relevant facts for an entity and query.
+    /// Recalls relevant facts for an entity and query, optionally filtered by scope.
     /// </summary>
     public async ValueTask<IReadOnlyList<RecallResult>> RecallAsync(
         string entityId,
         string query,
         int? limit = null,
+        string? scope = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -137,7 +149,7 @@ public sealed class MemorySearchService
             // Vector search path
             var searchOptions = new VectorSearchOptions<MemoryFactRecord>
             {
-                Filter = r => r.EntityId == entityId
+                Filter = buildRecallFilter(entityId, scope)
             };
 
             var searchResults = factCollection.SearchAsync(new ReadOnlyMemory<float>(queryEmbedding), Math.Max(options.RecallCandidateLimit, resolvedLimit), searchOptions, cancellationToken);
@@ -168,7 +180,7 @@ public sealed class MemorySearchService
             // Lexical fallback path - get all facts for entity and do local scoring
             var searchOptions = new VectorSearchOptions<MemoryFactRecord>
             {
-                Filter = r => r.EntityId == entityId
+                Filter = buildRecallFilter(entityId, scope)
             };
 
             var searchResults = factCollection.SearchAsync(query, Math.Max(options.RecallCandidateLimit, resolvedLimit), searchOptions, cancellationToken);

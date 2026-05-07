@@ -514,7 +514,7 @@ Build a composite wrapper that queries multiple `VectorStoreCollection<string, M
 
 ---
 
-## PHASE2-TASK-9: Workspace/Scope Support
+## PHASE2-TASK-9: Workspace/Scope Support ✅
 
 ### Priority
 
@@ -524,11 +524,12 @@ Medium
 
 Extend `IConversationStorage` and `MemoryFactRecord` to support workspace/scope identifiers, enabling shared memory across teams or organizations while maintaining isolation boundaries.
 
-### Decision Required
+### Decisions Made
 
-- How should scopes be represented — string scope ID, composite key, or hierarchy?
-- Should scope be part of `MemoryFactRecord` as a filterable field, or a query-time parameter?
-- How does scope interact with `EntityId` isolation?
+- Scope is represented as an optional string identifier on `MemoryFactRecord` (indexed filterable field).
+- Scope is a filter-time parameter on `MemorySearchService.RecallAsync` and a property on the `Memori` facade.
+- Scope works alongside `EntityId` isolation — recall requires both entity match AND scope match (when scope is set).
+- When no scope is set, recall returns facts across all scopes (backward compatible).
 
 ### Scope
 
@@ -540,22 +541,24 @@ Extend `IConversationStorage` and `MemoryFactRecord` to support workspace/scope 
 
 ### Acceptance Criteria
 
-- [ ] Scope field is defined on `MemoryFactRecord`
-- [ ] `IConversationStorage` extension is backward compatible
-- [ ] Scope isolation tests pass
-- [ ] Cross-scope retrieval works when explicitly requested
-- [ ] Documentation explains scope semantics
+- [x] Scope field is defined on `MemoryFactRecord`
+- [x] `IConversationStorage` extension is backward compatible
+- [x] Scope isolation tests pass
+- [x] Cross-scope retrieval works when explicitly requested
+- [x] Documentation explains scope semantics
 
 ### Files
 
 - Modify: `src/Memori/Models/MemoryFactRecord.cs`
 - Modify: `src/Memori/Abstractions/IConversationStorage.cs`
 - Modify: `src/Memori/Search/MemorySearchService.cs`
+- Modify: `src/Memori/Memori.cs`
+- Modify: `src/Memori/Storage/InMemoryConversationStorage.cs`
 - New: `src/Memori.Tests/ScopeIsolationTests.cs`
 
 ---
 
-## PHASE2-TASK-10: Conflict Resolution and Versioning
+## PHASE2-TASK-10: Conflict Resolution and Versioning ✅
 
 ### Priority
 
@@ -565,25 +568,27 @@ Medium
 
 Add versioning fields to `MemoryFactRecord` and implement conflict detection and resolution strategies for concurrent memory updates.
 
-### Decision Required
+### Decisions Made
 
-- How should versions be represented — timestamps, sequence numbers, or UUIDs?
-- Which resolution strategy is the default — last-write-wins, merge, or manual review?
+- Versions are represented as incrementing integer sequence numbers (`Version` property, starts at 1).
+- `PreviousVersionId` stores the ID of the prior version for audit trail traversal.
+- Default strategy: `LastWriteWins` (safest default for high-throughput scenarios).
+- Three strategies implemented: `LastWriteWins`, `Merge` (combines content), `Manual` (flags for review).
 
 ### Scope
 
 - Add version metadata to `MemoryFactRecord`
 - Define conflict detection logic
-- Implement 2–3 resolution strategies (last-write-wins, merge, manual)
+- Implement 3 resolution strategies (last-write-wins, merge, manual)
 - Write 15+ tests for conflict scenarios and resolution
 
 ### Acceptance Criteria
 
-- [ ] Version fields are defined on `MemoryFactRecord`
-- [ ] Conflict detection logic is clear and tested
-- [ ] At least 3 resolution strategies are implemented
-- [ ] Audit trail is queryable
-- [ ] 15+ tests cover conflict scenarios
+- [x] Version fields are defined on `MemoryFactRecord`
+- [x] Conflict detection logic is clear and tested
+- [x] 3 resolution strategies are implemented
+- [x] Audit trail is queryable via `PreviousVersionId` chain
+- [x] 20 tests cover conflict scenarios
 
 ### Files
 
@@ -594,7 +599,7 @@ Add versioning fields to `MemoryFactRecord` and implement conflict detection and
 
 ---
 
-## PHASE2-TASK-11: Thread Summarization
+## PHASE2-TASK-11: Thread Summarization ✅
 
 ### Priority
 
@@ -613,10 +618,10 @@ Define `IThreadSummarizer` and a reference implementation using `IChatClient`. I
 
 ### Acceptance Criteria
 
-- [ ] `IThreadSummarizer` is defined
-- [ ] Reference implementation uses `IChatClient`
-- [ ] Summaries stored as `MemoryFactRecord` with appropriate `MemoryType`
-- [ ] 10+ tests cover happy path and error handling
+- [x] `IThreadSummarizer` is defined
+- [x] Reference implementation uses `IChatClient`
+- [x] Summaries stored as `MemoryFactRecord` with appropriate `MemoryType`
+- [x] 11 tests cover happy path and error handling
 
 ### Files
 
@@ -627,7 +632,7 @@ Define `IThreadSummarizer` and a reference implementation using `IChatClient`. I
 
 ---
 
-## PHASE2-TASK-12: User Memory Management APIs
+## PHASE2-TASK-12: User Memory Management APIs ✅
 
 ### Priority
 
@@ -646,10 +651,10 @@ Add public APIs for users to inspect, search, filter, edit, and delete their sto
 
 ### Acceptance Criteria
 
-- [ ] List, search, filter, edit, and delete operations are implemented
-- [ ] Soft delete is supported
-- [ ] 15+ tests cover all operations
-- [ ] Access control patterns are documented (app responsibility, not Memori)
+- [x] List, search, filter, edit, and delete operations are implemented
+- [x] Soft delete is supported
+- [x] 17 tests cover all operations
+- [x] Access control patterns are documented (app responsibility, not Memori)
 
 ### Files
 

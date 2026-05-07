@@ -1,9 +1,9 @@
-using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
+using Memori.Storage;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using Memori.Storage;
+using Microsoft.Extensions.VectorData;
 
 namespace Memori;
 

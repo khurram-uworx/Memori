@@ -1,7 +1,7 @@
+using Memori.Models;
+using Microsoft.Extensions.VectorData;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.VectorData;
-using Memori.Models;
 
 namespace Memori.Search;
 

@@ -74,20 +74,24 @@ public interface IConversationStorage
     /// Gets or creates an entity and returns its public storage identifier.
     /// </summary>
     /// <param name="externalId">External entity identifier, usually a user id.</param>
+    /// <param name="scope">Optional workspace/scope identifier for multi-tenant isolation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The public storage identifier for the entity.</returns>
     ValueTask<string> GetOrCreateEntityAsync(
         string externalId,
+        string? scope = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets or creates a process and returns its public storage identifier.
     /// </summary>
     /// <param name="externalId">External process or workflow identifier.</param>
+    /// <param name="scope">Optional workspace/scope identifier for multi-tenant isolation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The public storage identifier for the process.</returns>
     ValueTask<string> GetOrCreateProcessAsync(
         string externalId,
+        string? scope = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -96,12 +100,14 @@ public interface IConversationStorage
     /// <param name="sessionId">External session identifier.</param>
     /// <param name="entityId">Public storage identifier for the entity, if available.</param>
     /// <param name="processId">Public storage identifier for the process, if available.</param>
+    /// <param name="scope">Optional workspace/scope identifier for multi-tenant isolation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The public storage identifier for the session.</returns>
     ValueTask<string> GetOrCreateSessionAsync(
         string sessionId,
         string? entityId,
         string? processId,
+        string? scope = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

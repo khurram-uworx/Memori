@@ -30,6 +30,7 @@ public sealed class MemoryFactRecord
     /// <param name="confidence">The confidence score (0.0-1.0).</param>
     /// <param name="createdAt">When this fact was created.</param>
     /// <param name="conversationId">The source conversation ID, if any.</param>
+    /// <param name="scope">Optional workspace/scope identifier for multi-tenant isolation.</param>
     public MemoryFactRecord(
         string id,
         string entityId,
@@ -38,7 +39,8 @@ public sealed class MemoryFactRecord
         string memoryType = "general",
         double confidence = 0.5,
         DateTimeOffset? createdAt = null,
-        string? conversationId = null)
+        string? conversationId = null,
+        string? scope = null)
     {
         Id = id;
         EntityId = entityId;
@@ -48,6 +50,7 @@ public sealed class MemoryFactRecord
         Confidence = confidence;
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow;
         ConversationId = conversationId;
+        Scope = scope;
     }
 
     /// <summary>
@@ -99,8 +102,34 @@ public sealed class MemoryFactRecord
     public string? ConversationId { get; set; }
 
     /// <summary>
+    /// Optional workspace/scope identifier for multi-tenant isolation.
+    /// When set, recall is filtered to only return facts matching this scope.
+    /// </summary>
+    [VectorStoreData(IsIndexed = true)]
+    public string? Scope { get; set; }
+
+    /// <summary>
     /// Summaries associated with this fact.
     /// </summary>
     [VectorStoreData]
     public IReadOnlyList<MemorySummary> Summaries { get; set; } = Array.Empty<MemorySummary>();
+
+    /// <summary>
+    /// Version number for conflict resolution. Starts at 1 and increments on each update.
+    /// </summary>
+    [VectorStoreData(IsIndexed = true)]
+    public int Version { get; set; } = 1;
+
+    /// <summary>
+    /// The ID of the previous version of this fact, if any. Used for version tracking and audit.
+    /// </summary>
+    [VectorStoreData]
+    public string? PreviousVersionId { get; set; }
+
+    /// <summary>
+    /// Whether this fact has been soft-deleted. Soft-deleted facts are excluded from recall
+    /// but remain in storage for audit and recovery purposes.
+    /// </summary>
+    [VectorStoreData(IsIndexed = true)]
+    public bool IsDeleted { get; set; }
 }

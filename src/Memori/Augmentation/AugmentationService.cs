@@ -1,7 +1,7 @@
-using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
 
 namespace Memori.Augmentation;
 

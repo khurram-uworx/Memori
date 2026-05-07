@@ -1,10 +1,10 @@
-using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Memori.Storage;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
 
 namespace Memori.Tests;

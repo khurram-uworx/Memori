@@ -1,10 +1,10 @@
+using Microsoft.Extensions.VectorData;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Numerics.Tensors;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.VectorData;
 
 namespace Memori.Storage;
 

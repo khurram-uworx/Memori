@@ -1,9 +1,10 @@
-using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Search;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
+using System.Linq.Expressions;
 
 namespace Memori;
 
@@ -21,6 +22,7 @@ public sealed class Memori
 
     Attribution? attribution;
     string? sessionId;
+    string? scope;
 
     internal MemoriOptions Options => options;
 
@@ -53,6 +55,20 @@ public sealed class Memori
     }
 
     /// <summary>
+    /// Gets the current workspace scope, if one has been configured.
+    /// </summary>
+    public string? CurrentScope
+    {
+        get
+        {
+            lock (gate)
+            {
+                return scope;
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates a new Memori facade.
     /// </summary>
     public Memori(
@@ -61,7 +77,8 @@ public sealed class Memori
         MemoriOptions? options = null,
         string? sessionId = null,
         IAugmentationClient? augmentationClient = null,
-        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
+        string? scope = null)
     {
         this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
         this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
@@ -69,6 +86,7 @@ public sealed class Memori
         this.options.Validate();
         memorySearchService = new MemorySearchService(factCollection, embeddingGenerator, this.options);
         this.sessionId = sessionId;
+        this.scope = scope;
         augmentationService = augmentationClient is null
             ? null
             : new AugmentationService(conversationStorage, factCollection, augmentationClient, embeddingGenerator, this.options);
@@ -126,6 +144,32 @@ public sealed class Memori
     public void ResumeSession(string sessionId) => SetSession(sessionId);
 
     /// <summary>
+    /// Sets the workspace scope for subsequent recall operations.
+    /// When set, only facts matching this scope are returned by recall.
+    /// </summary>
+    public void SetScope(string scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+            throw new ArgumentException("Value cannot be empty.", nameof(scope));
+
+        lock (gate)
+        {
+            this.scope = scope;
+        }
+    }
+
+    /// <summary>
+    /// Clears the workspace scope, allowing recall across all scopes.
+    /// </summary>
+    public void ClearScope()
+    {
+        lock (gate)
+        {
+            scope = null;
+        }
+    }
+
+    /// <summary>
     /// Clears the current attribution context.
     /// </summary>
     public void ClearAttribution()
@@ -175,17 +219,17 @@ public sealed class Memori
 
         currentSessionId ??= NewSession();
 
-        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
+        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var processId = currentAttribution.ProcessId is null
             ? null
-            : await conversationStorage.GetOrCreateProcessAsync(currentAttribution.ProcessId, cancellationToken)
+            : await conversationStorage.GetOrCreateProcessAsync(currentAttribution.ProcessId, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         var resolvedSessionId = await conversationStorage.GetOrCreateSessionAsync(
                 currentSessionId,
                 entityId,
                 processId,
-                cancellationToken)
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var conversation = await conversationStorage.GetOrCreateConversationAsync(
                 resolvedSessionId,
@@ -221,7 +265,7 @@ public sealed class Memori
             : augmentationService.WaitForAugmentationAsync(cancellationToken);
 
     /// <summary>
-    /// Recalls relevant facts for the current attribution context.
+    /// Recalls relevant facts for the current attribution context, optionally filtered by scope.
     /// </summary>
     public async ValueTask<IReadOnlyList<RecallResult>> RecallAsync(
         string query,
@@ -231,9 +275,11 @@ public sealed class Memori
         ArgumentNullException.ThrowIfNull(query);
 
         Attribution? currentAttribution;
+        string? currentScope;
         lock (gate)
         {
             currentAttribution = attribution;
+            currentScope = scope;
         }
 
         if (currentAttribution is null)
@@ -243,6 +289,7 @@ public sealed class Memori
                 currentAttribution.EntityId,
                 query,
                 limit,
+                currentScope,
                 cancellationToken)
             .ConfigureAwait(false);
     }
@@ -260,26 +307,32 @@ public sealed class Memori
         => memorySearchService.BuildPromptContext(results);
 
     /// <summary>
-    /// Deletes durable memories for the current attribution context.
+    /// Deletes durable memories for the current attribution context, optionally filtered by scope.
     /// </summary>
     public async ValueTask DeleteEntityMemoriesAsync(CancellationToken cancellationToken = default)
     {
         Attribution? currentAttribution;
+        string? currentScope;
         lock (gate)
         {
             currentAttribution = attribution;
+            currentScope = scope;
         }
 
         if (currentAttribution is null)
             return;
 
-        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, cancellationToken)
+        var entityId = await conversationStorage.GetOrCreateEntityAsync(currentAttribution.EntityId, currentScope, cancellationToken)
             .ConfigureAwait(false);
 
         // Search for all facts for this entity and delete them by key
+        Expression<Func<MemoryFactRecord, bool>> filter = currentScope is null
+            ? r => r.EntityId == entityId
+            : r => r.EntityId == entityId && r.Scope == currentScope;
+
         var searchOptions = new VectorSearchOptions<MemoryFactRecord>
         {
-            Filter = r => r.EntityId == entityId
+            Filter = filter
         };
 
         var searchResults = factCollection.SearchAsync(new ReadOnlyMemory<float>(new float[1536]), 1000, searchOptions, cancellationToken);
