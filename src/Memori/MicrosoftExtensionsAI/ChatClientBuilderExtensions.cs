@@ -1,7 +1,9 @@
+using Microsoft.Extensions.VectorData;
 using Memori.Abstractions;
 using Memori.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Memori.Storage;
 
 namespace Memori;
 
@@ -50,13 +52,14 @@ public static class ChatClientBuilderExtensions
     /// </summary>
     public static ChatClientBuilder UseMemori(
         this ChatClientBuilder builder,
-        Func<IServiceProvider, IStorage> storageFactory,
+        Func<IServiceProvider, IConversationStorage> conversationStorageFactory,
+        Func<IServiceProvider, VectorStoreCollection<string, MemoryFactRecord>>? factCollectionFactory = null,
         Func<IServiceProvider, IEmbeddingGenerator<string, Embedding<float>>>? embeddingGeneratorFactory = null,
         Func<IServiceProvider, IAugmentationClient>? augmentationClientFactory = null,
         Action<MemoriOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(storageFactory);
+        ArgumentNullException.ThrowIfNull(conversationStorageFactory);
 
         return builder.Use((inner, services) =>
         {
@@ -64,13 +67,25 @@ public static class ChatClientBuilderExtensions
             configureOptions?.Invoke(options);
             options.Validate();
 
+            var conversationStorage = conversationStorageFactory(services);
+            var factCollection = factCollectionFactory?.Invoke(services) ?? CreateDefaultFactCollection(services);
+            var augmentationClient = augmentationClientFactory?.Invoke(services);
+            var embeddingGenerator = embeddingGeneratorFactory?.Invoke(services);
+
             var memori = new Memori(
-                storageFactory(services),
+                conversationStorage,
+                factCollection,
                 options,
-                augmentationClient: augmentationClientFactory?.Invoke(services),
-                embeddingGenerator: embeddingGeneratorFactory?.Invoke(services));
+                augmentationClient: augmentationClient,
+                embeddingGenerator: embeddingGenerator);
 
             return new MemoriChatClient(inner, memori);
         });
+    }
+
+    static VectorStoreCollection<string, MemoryFactRecord> CreateDefaultFactCollection(IServiceProvider services)
+    {
+        var vectorStore = new InMemoryVectorStore();
+        return vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
     }
 }

@@ -1,33 +1,26 @@
 using Memori.Abstractions;
 using Memori.Models;
-using Memori.Search;
 
 namespace Memori.Storage;
 
 /// <summary>
-/// Thread-safe in-memory implementation of <see cref="IStorage"/>.
+/// Thread-safe in-memory implementation of <see cref="IConversationStorage"/>.
 /// </summary>
 /// <remarks>
 /// This implementation is intended for tests, demos, local development, and as
 /// reference behavior for custom storage providers. It is not durable across
 /// process restarts.
 /// </remarks>
-public sealed class InMemoryStorage : IStorage
+public sealed class InMemoryConversationStorage : IConversationStorage
 {
     sealed class EntityState(string id)
     {
         public string Id { get; } = id;
-
-        public List<MemoryFact> Facts { get; } = [];
-
-        public List<SemanticTriple> SemanticTriples { get; } = [];
     }
 
     sealed class ProcessState(string id)
     {
         public string Id { get; } = id;
-
-        public HashSet<string> Attributes { get; } = new(StringComparer.Ordinal);
     }
 
     sealed class SessionState(string id, string? entityId, string? processId)
@@ -63,14 +56,12 @@ public sealed class InMemoryStorage : IStorage
     readonly Dictionary<string, ProcessState> processes = new(StringComparer.Ordinal);
     readonly Dictionary<string, SessionState> sessions = new(StringComparer.Ordinal);
     readonly Dictionary<string, ConversationState> conversations = new(StringComparer.Ordinal);
-    readonly IMemoryRanker ranker;
 
     /// <summary>
-    /// Creates a new in-memory storage instance.
+    /// Creates a new in-memory conversation storage instance.
     /// </summary>
-    public InMemoryStorage(IMemoryRanker? ranker = null)
+    public InMemoryConversationStorage()
     {
-        this.ranker = ranker ?? new DefaultMemoryRanker();
     }
 
     ConversationState getConversationState(string conversationId)
@@ -227,169 +218,6 @@ public sealed class InMemoryStorage : IStorage
                 Summary = summary,
                 UpdatedAt = DateTimeOffset.UtcNow,
             };
-        }
-
-        return ValueTask.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public ValueTask<IReadOnlyList<MemoryFact>> AddFactsAsync(string entityId, IReadOnlyList<NewMemoryFact> facts,
-        string? conversationId = null,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = Attribution.ValidateRequiredIdentifier(entityId, nameof(entityId));
-        ArgumentNullException.ThrowIfNull(facts);
-
-        lock (gate)
-        {
-            if (!entities.TryGetValue(id, out var entity))
-            {
-                entity = new EntityState(id);
-                entities[id] = entity;
-            }
-
-            var stored = new List<MemoryFact>(facts.Count);
-
-            foreach (var fact in facts)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                ArgumentNullException.ThrowIfNull(fact);
-
-                var memoryFact = new MemoryFact(
-                    id: newId("fact"),
-                    entityId: entity.Id,
-                    content: fact.Content,
-                    createdAt: fact.CreatedAt ?? DateTimeOffset.UtcNow,
-                    embedding: fact.Embedding?.ToArray(),
-                    conversationId: conversationId,
-                    summaries: fact.Summaries.ToArray(),
-                    confidence: fact.Confidence,
-                    memoryType: fact.MemoryType);
-
-                entity.Facts.Add(memoryFact);
-                stored.Add(memoryFact);
-            }
-
-            return ValueTask.FromResult<IReadOnlyList<MemoryFact>>(stored);
-        }
-    }
-
-    /// <inheritdoc />
-    public ValueTask<IReadOnlyList<RecallResult>> SearchFactsAsync(string entityId, string query,
-        ReadOnlyMemory<float>? queryEmbedding, int limit, int candidateLimit,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = Attribution.ValidateRequiredIdentifier(entityId, nameof(entityId));
-
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be greater than zero.");
-
-        if (candidateLimit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(candidateLimit), "Candidate limit must be greater than zero.");
-
-        lock (gate)
-        {
-            if (!entities.TryGetValue(id, out var entity) || entity.Facts.Count == 0)
-                return ValueTask.FromResult<IReadOnlyList<RecallResult>>(Array.Empty<RecallResult>());
-
-            var candidates = entity.Facts
-                .Take(candidateLimit)
-                .Select(fact =>
-                {
-                    var similarity = queryEmbedding.HasValue && fact.Embedding is not null
-                        ? Similarity.Cosine(queryEmbedding.Value.Span, fact.Embedding)
-                        : 0;
-                    var hasDenseSignal = queryEmbedding.HasValue && fact.Embedding is not null;
-                    var lexicalScore = Similarity.LexicalScore(query, fact.Content);
-                    var rankScore = Similarity.RankScore(similarity, lexicalScore, hasDenseSignal);
-                    var result = new RecallResult(
-                        fact.Id,
-                        fact.Content,
-                        similarity,
-                        rankScore,
-                        fact.CreatedAt,
-                        fact.Summaries,
-                        fact.Confidence,
-                        fact.MemoryType);
-
-                    return result;
-                })
-                .Where(result => result.RankScore > 0)
-                .OrderByDescending(result => ranker.Rank(result, DateTimeOffset.UtcNow))
-                .ThenByDescending(result => result.CreatedAt)
-                .Take(limit)
-                .ToArray();
-
-            return ValueTask.FromResult<IReadOnlyList<RecallResult>>(candidates);
-        }
-    }
-
-    /// <inheritdoc />
-    public ValueTask DeleteEntityMemoriesAsync(string entityId,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = Attribution.ValidateRequiredIdentifier(entityId, nameof(entityId));
-
-        lock (gate)
-        {
-            if (entities.TryGetValue(id, out var entity))
-            {
-                entity.Facts.Clear();
-                entity.SemanticTriples.Clear();
-            }
-        }
-
-        return ValueTask.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public ValueTask AddSemanticTriplesAsync(string entityId, IReadOnlyList<SemanticTriple> triples,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = Attribution.ValidateRequiredIdentifier(entityId, nameof(entityId));
-        ArgumentNullException.ThrowIfNull(triples);
-
-        lock (gate)
-        {
-            if (!entities.TryGetValue(id, out var entity))
-            {
-                entity = new EntityState(id);
-                entities[id] = entity;
-            }
-
-            entity.SemanticTriples.AddRange(triples);
-        }
-
-        return ValueTask.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public ValueTask AddProcessAttributesAsync(string processId, IReadOnlyList<string> attributes,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = Attribution.ValidateRequiredIdentifier(processId, nameof(processId));
-        ArgumentNullException.ThrowIfNull(attributes);
-
-        lock (gate)
-        {
-            if (!processes.TryGetValue(id, out var process))
-            {
-                process = new ProcessState(id);
-                processes[id] = process;
-            }
-
-            foreach (var attribute in attributes)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!string.IsNullOrWhiteSpace(attribute))
-                    process.Attributes.Add(attribute);
-            }
         }
 
         return ValueTask.CompletedTask;
