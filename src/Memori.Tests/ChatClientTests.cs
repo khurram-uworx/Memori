@@ -927,4 +927,137 @@ public class ChatClientTests
         Assert.That(updates[1].Text, Is.EqualTo("2"));
         Assert.That(updates[2].Text, Is.EqualTo("3"));
     }
+
+    [Test]
+    public async Task GetResponseAsync_MetadataWithNullValues_OmitsNullKeys()
+    {
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        // Response with only model_id set; other metadata is null
+        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer"))
+        {
+            ResponseId = null,
+            ConversationId = null,
+            ModelId = "model-1",
+            CreatedAt = null,
+            FinishReason = null,
+            Usage = null,
+            AdditionalProperties = null,
+        };
+        var inner = new RecordingChatClient(response);
+        var client = new MemoriChatClient(inner, memori);
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Hello")]);
+
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        var assistant = messages.Single(message => message.Role == ConversationRoles.Assistant);
+
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.response_id"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.conversation_id"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.created_at"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.finish_reason"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.usage"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.response_additional_properties"), Is.False);
+        Assert.That(assistant.Metadata["memori.provider.model_id"], Is.EqualTo("model-1"));
+    }
+
+    [Test]
+    public async Task GetResponseAsync_MetadataWithNoAdditionalProperties_DoesNotSetThatKey()
+    {
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer"))
+        {
+            ResponseId = "response-1",
+            AdditionalProperties = null,
+        };
+        var inner = new RecordingChatClient(response);
+        var client = new MemoriChatClient(inner, memori);
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Hello")]);
+
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        var assistant = messages.Single(message => message.Role == ConversationRoles.Assistant);
+
+        Assert.That(assistant.Metadata["memori.provider.response_id"], Is.EqualTo("response-1"));
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.response_additional_properties"), Is.False);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_MetadataWithEmptyResponseIds_OmitsStreamingKeys()
+    {
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
+        memori.Attribution("entity-1");
+        memori.SetSession("test-session");
+
+        var update = new ChatResponseUpdate(ChatRole.Assistant, "streamed answer")
+        {
+            ResponseId = null,
+            MessageId = null,
+            ConversationId = "provider-conversation-1",
+            ModelId = "model-1",
+        };
+        var inner = new StreamingRecordingChatClient([update]);
+        var client = new MemoriChatClient(inner, memori);
+
+        await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "Hello")]))
+        { }
+
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        var assistant = messages.Single(message => message.Role == ConversationRoles.Assistant);
+
+        Assert.That(assistant.Metadata["memori.provider.conversation_id"], Is.EqualTo("provider-conversation-1"));
+        Assert.That(assistant.Metadata["memori.provider.model_id"], Is.EqualTo("model-1"));
+        // streaming_response_ids and streaming_message_ids should be omitted when empty/null
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.streaming_response_ids"), Is.False);
+        Assert.That(assistant.Metadata.ContainsKey("memori.provider.streaming_message_ids"), Is.False);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenNoAttribution_SkipsCaptureGracefully()
+    {
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
+        // Deliberately no attribution set
+
+        var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
+        var client = new MemoriChatClient(inner, memori);
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Hello")]);
+
+        // No conversation should be created since no attribution was set
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        Assert.That(messages, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenNoAttribution_SkipsCaptureGracefully()
+    {
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
+        // Deliberately no attribution set
+
+        var inner = new StreamingRecordingChatClient(
+            [new ChatResponseUpdate(ChatRole.Assistant, "streamed answer")]);
+        var client = new MemoriChatClient(inner, memori);
+
+        await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "Hello")]))
+        { }
+
+        // No conversation should be created since no attribution was set
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
+        Assert.That(messages, Is.Empty);
+    }
 }

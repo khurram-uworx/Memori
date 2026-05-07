@@ -1,5 +1,6 @@
 using Memori.Abstractions;
 using Memori.Augmentation;
+using Memori.Management;
 using Memori.Models;
 using Memori.Search;
 using Microsoft.Extensions.AI;
@@ -18,6 +19,7 @@ public sealed class Memori
     readonly MemoriOptions options;
     readonly MemorySearchService memorySearchService;
     readonly AugmentationService? augmentationService;
+    readonly IMemoryManagementService? memoryManagement;
     readonly object gate = new();
 
     Attribution? attribution;
@@ -78,7 +80,8 @@ public sealed class Memori
         string? sessionId = null,
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
-        string? scope = null)
+        string? scope = null,
+        IMemoryManagementService? memoryManagement = null)
     {
         this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
         this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
@@ -87,6 +90,7 @@ public sealed class Memori
         memorySearchService = new MemorySearchService(factCollection, embeddingGenerator, this.options);
         this.sessionId = sessionId;
         this.scope = scope;
+        this.memoryManagement = memoryManagement;
         augmentationService = augmentationClient is null
             ? null
             : new AugmentationService(conversationStorage, factCollection, augmentationClient, embeddingGenerator, this.options);
@@ -251,7 +255,8 @@ public sealed class Memori
                 entityId,
                 processId,
                 conversation.Id,
-                capturedMessages);
+                capturedMessages,
+                conversation.Summary);
             await augmentationService.EnqueueAsync(input, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -347,6 +352,74 @@ public sealed class Memori
         {
             await factCollection.DeleteAsync(keysToDelete, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    IMemoryManagementService getMemoryManagement()
+        => memoryManagement ?? throw new InvalidOperationException(
+            "IMemoryManagementService is not configured. Register it via DI or pass it to the Memori constructor.");
+
+    /// <summary>
+    /// Lists all memory records for the current attribution entity.
+    /// </summary>
+    public ValueTask<IReadOnlyList<MemoryFactRecord>> ListMemoriesAsync(
+        int skip = 0,
+        int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var entityId = CurrentAttribution?.EntityId
+            ?? throw new InvalidOperationException("Attribution is required. Call Attribution() first.");
+        return getMemoryManagement().ListMemoriesAsync(entityId, skip, take, cancellationToken);
+    }
+
+    /// <summary>
+    /// Searches memories for the current attribution entity by content text.
+    /// </summary>
+    public ValueTask<IReadOnlyList<MemoryFactRecord>> SearchMemoriesAsync(
+        string searchText,
+        string? memoryType = null,
+        bool includeDeleted = false,
+        int take = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var entityId = CurrentAttribution?.EntityId
+            ?? throw new InvalidOperationException("Attribution is required. Call Attribution() first.");
+        return getMemoryManagement().SearchMemoriesAsync(entityId, searchText, memoryType, CurrentScope, includeDeleted, take, cancellationToken);
+    }
+
+    /// <summary>
+    /// Soft-deletes a memory record by ID.
+    /// </summary>
+    public ValueTask<bool> SoftDeleteMemoryAsync(
+        string memoryId,
+        CancellationToken cancellationToken = default)
+        => getMemoryManagement().SoftDeleteMemoryAsync(memoryId, cancellationToken);
+
+    /// <summary>
+    /// Restores a soft-deleted memory record.
+    /// </summary>
+    public ValueTask<bool> RestoreMemoryAsync(
+        string memoryId,
+        CancellationToken cancellationToken = default)
+        => getMemoryManagement().RestoreMemoryAsync(memoryId, cancellationToken);
+
+    /// <summary>
+    /// Permanently deletes a memory record.
+    /// </summary>
+    public ValueTask<bool> HardDeleteMemoryAsync(
+        string memoryId,
+        CancellationToken cancellationToken = default)
+        => getMemoryManagement().HardDeleteMemoryAsync(memoryId, cancellationToken);
+
+    /// <summary>
+    /// Gets the total memory count for the current attribution entity.
+    /// </summary>
+    public ValueTask<int> GetMemoryCountAsync(
+        bool includeDeleted = false,
+        CancellationToken cancellationToken = default)
+    {
+        var entityId = CurrentAttribution?.EntityId
+            ?? throw new InvalidOperationException("Attribution is required. Call Attribution() first.");
+        return getMemoryManagement().GetMemoryCountAsync(entityId, includeDeleted, cancellationToken);
     }
 
     static IReadOnlyList<ConversationMessage> normalizeMessages(

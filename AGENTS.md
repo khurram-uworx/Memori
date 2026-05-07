@@ -14,16 +14,19 @@ Primary goals for changes:
 ## Repository Map
 
 - `src/Memori`: main library (`net10.0`)
-  - `Abstractions`: public extension points (`IStorage`, embeddings, augmentation contracts).
+  - `Abstractions`: public extension points (`IConversationStorage`, `IAugmentationClient`, `IEmbeddingGenerator`, `IMemoryRanker`, `IMemoryManagementService`, `IThreadSummarizer`).
   - `Models`: domain models and options.
-  - `Storage`: `InMemoryStorage` reference implementation.
-  - `Search`: recall orchestration and formatting.
-  - `Augmentation`: background augmentation pipeline.
+  - `Storage`: `InMemoryConversationStorage` reference implementation.
+  - `Search`: recall orchestration and formatting, distributed ranker, composite collection.
+  - `Augmentation`: background augmentation pipeline with versioning and summarization integration.
+  - `Summarization`: `ChatClientThreadSummarizer` implementation.
+  - `Versioning`: conflict resolution service.
+  - `Management`: `MemoryManagementService` implementation.
   - `MicrosoftExtensionsAI`: `IChatClient` middleware and DI extensions.
   - `Memori.cs`: facade entry point.
-- `src/Memori.Tests`: NUnit test suite for facade, storage, augmentation, and chat middleware behavior.
-- `docs`: design notes, gaps, and follow-up plans.
-- `.github/workflows/ci.yml`: authoritative CI build/test steps.
+- `src/Memori.Tests`: NUnit test suite (211 tests) for facade, storage, augmentation, chat middleware, scope isolation, versioning, distributed ranker, composite collection, memory management, and stress/concurrency.
+- `docs`: design notes and follow-up plans.
+- `.github/workflows/ci.yml`: authoritative CI build/test/pack steps.
 
 ## Local Workflow
 
@@ -55,8 +58,8 @@ Match CI defaults when possible (`Release` configuration, full test run).
 
 ## Architectural Guardrails
 
-- `IStorage` is the durable boundary. New persistent behavior should flow through it.
-- `InMemoryStorage` is reference behavior, not a production database driver.
+- `IConversationStorage` is the durable boundary for conversation data; `VectorStoreCollection<string, MemoryFactRecord>` is the durable boundary for fact storage. New persistent behavior should flow through one of these.
+- `InMemoryConversationStorage` and `InMemoryVectorStore` are reference behavior, not production database drivers.
 - `MemoriChatClient` must:
   - recall before model call,
   - avoid persisting injected memory context as conversation content,

@@ -12,6 +12,7 @@ It gives your AI app a persistent, searchable memory layer: capture conversation
 - `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
 - A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
 - `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
+- Scope isolation, versioning, conflict resolution, thread summarization, and memory management APIs
 
 ## Installation
 
@@ -112,6 +113,21 @@ memori.ResumeSession("session_abc");
 ```
 
 Recall and delete operations are always scoped to the current attribution entity. Sessions only affect capture grouping and conversation history.
+
+### Scope Isolation
+
+Isolate memory by workspace or team:
+
+```csharp
+memori.Attribution("user_123");
+memori.SetScope("workspace-a");
+
+// Only facts in "workspace-a" are returned
+var recalled = await memori.RecallAsync("coffee");
+
+memori.ClearScope();
+// All scopes are searched when no scope is set
+```
 
 ## Microsoft.Extensions.AI Middleware
 
@@ -249,6 +265,54 @@ Included clients:
 - `PromptAugmentationClient`: uses an `IChatClient` to extract structured JSON output.
 
 Implement `IAugmentationClient` to use custom extraction logic. See [ARCHITECTURE.md](ARCHITECTURE.md) for the augmentation contract and mapping helpers.
+
+## Versioning and Conflict Resolution
+
+Memori tracks record versions for concurrent memory updates:
+
+```csharp
+var versioning = new VersioningService(ConflictResolutionStrategy.LastWriteWins);
+
+var existing = await factCollection.GetAsync("fact-id");
+var resolution = versioning.ResolveConflict(incoming, existing, expectedVersion: 1);
+```
+
+Three strategies are available:
+- **LastWriteWins** (default): the latest write overwrites.
+- **Merge**: conflicting content is combined.
+- **Manual**: conflicts are flagged for external review.
+
+Each record carries a `Version` integer, a `PreviousVersionId` for audit trail, and an `IsDeleted` flag for soft-delete.
+
+## Thread Summarization
+
+Generate conversation summaries using any `IChatClient`:
+
+```csharp
+var summarizer = new ChatClientThreadSummarizer(chatClient);
+
+// Initial summary
+var summary = await summarizer.SummarizeAsync(messages);
+
+// Rolling summary with previous context
+var updated = await summarizer.SummarizeAsync(newMessages, previousSummary);
+```
+
+Summaries are stored as `MemoryFactRecord` entries with `MemoryType = "summary"`.
+
+## Memory Management
+
+Inspect, search, edit, soft-delete, and restore stored memories:
+
+```csharp
+var management = serviceProvider.GetRequiredService<IMemoryManagementService>();
+
+var memories = await management.ListMemoriesAsync("entity-1");
+var results = await management.SearchMemoriesAsync("entity-1", "coffee");
+await management.SoftDeleteMemoryAsync("fact-id");
+await management.RestoreMemoryAsync("fact-id");
+await management.HardDeleteMemoryAsync("fact-id");
+```
 
 ## Hero Scenario: Full Memory Lifecycle
 

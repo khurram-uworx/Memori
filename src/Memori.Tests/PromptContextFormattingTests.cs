@@ -105,4 +105,129 @@ public class PromptContextFormattingTests
         Assert.That(context.Facts[0].RenderedText, Does.Contain("Stated at 2026-05-06"));
         Assert.That(context.Summaries[0].RenderedText, Does.Contain("[2026-05-06]"));
     }
+
+    [Test]
+    public void BuildPromptContext_WithEmptyResults_ReturnsEmptyRenderedText()
+    {
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+
+        var context = search.BuildPromptContext([]);
+
+        Assert.That(context.Facts, Is.Empty);
+        Assert.That(context.Summaries, Is.Empty);
+        Assert.That(context.RenderedText, Is.Empty);
+    }
+
+    [Test]
+    public void BuildPromptContext_WithNullResults_Throws()
+    {
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+
+        Assert.That(() => search.BuildPromptContext(null!), Throws.ArgumentNullException);
+    }
+
+    [Test]
+    public void BuildPromptContext_WithSpecialCharactersInContent_DoesNotFail()
+    {
+        var options = new MemoriOptions { PromptTimestampFormat = "yyyy-MM-dd" };
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var result = new RecallResult(
+            "fact-1",
+            "The user said price was <$100 & >$50 (100% sure) with \"special\" chars.",
+            0.8, 0.9, FactTime, memoryType: "profile");
+
+        var context = search.BuildPromptContext([result]);
+
+        Assert.That(context.Facts, Has.Count.EqualTo(1));
+        Assert.That(context.RenderedText, Does.Contain("<$100"));
+        Assert.That(context.RenderedText, Does.Contain(">"));
+        Assert.That(context.RenderedText, Does.Contain("\"special\""));
+    }
+
+    [Test]
+    public void BuildPromptContext_WithSpaceBullet_TrimsWhitespace()
+    {
+        var options = new MemoriOptions
+        {
+            PromptFactBullet = "  *  ",
+            PromptTimestampFormat = "yyyy-MM-dd",
+        };
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+
+        var context = search.BuildPromptContext([createResult()]);
+
+        Assert.That(context.Facts[0].RenderedText, Does.StartWith("* The user lives in Karachi."));
+    }
+
+    [Test]
+    public void BuildPromptContext_WithLeadingAndTrailingWhitespaceInTagName_Trims()
+    {
+        var options = new MemoriOptions
+        {
+            PromptContextTagName = "  my_context  ",
+            PromptTimestampFormat = "yyyy-MM-dd",
+        };
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+
+        var context = search.BuildPromptContext([createResult()]);
+
+        Assert.That(context.RenderedText, Does.StartWith("<my_context>"));
+        Assert.That(context.RenderedText, Does.EndWith("</my_context>"));
+    }
+
+    [Test]
+    public void FormatPromptContext_WithEmptyResults_ReturnsEmptyString()
+    {
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+
+        var rendered = search.FormatPromptContext([]);
+
+        Assert.That(rendered, Is.Empty);
+    }
+
+    [Test]
+    public void FormatPromptContext_WithNullResults_Throws()
+    {
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+
+        Assert.That(() => search.FormatPromptContext(null!), Throws.ArgumentNullException);
+    }
+
+    [Test]
+    public void FormatFactLines_WithEmptyResults_ReturnsEmpty()
+    {
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+
+        var lines = search.FormatFactLines([]);
+
+        Assert.That(lines, Is.Empty);
+    }
+
+    [Test]
+    public void FormatSummaryLines_ReturnsEmptyWhenSummariesDisabled()
+    {
+        var options = new MemoriOptions { IncludeSummariesInPrompt = false };
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+
+        var lines = search.FormatSummaryLines([createResult()]);
+
+        Assert.That(lines, Is.Empty);
+    }
+
+    [Test]
+    public void FormatSummaryLines_DeduplicatesDuplicateSummaries()
+    {
+        var options = new MemoriOptions { IncludeSummariesInPrompt = true };
+        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var result = new RecallResult(
+            "fact-1",
+            "The user lives in Karachi.",
+            0.8, 0.9, FactTime,
+            [new MemorySummary("Lives in Karachi.", SummaryTime), new MemorySummary("Lives in Karachi.", SummaryTime)],
+            0.7, "profile");
+
+        var lines = search.FormatSummaryLines([result]);
+
+        Assert.That(lines, Has.Count.EqualTo(1));
+    }
 }

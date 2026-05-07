@@ -231,7 +231,7 @@ Phase 2 Tier 1 replaced the monolithic `IStorage` interface with a split:
 - **`IConversationStorage`** — covers conversations, sessions, entities, processes, and messages (the relational half).
 - **`VectorStoreCollection<string, MemoryFactRecord>`** — covers durable fact storage with vector and lexical search, using `Microsoft.Extensions.VectorData` (the fact half).
 
-This lets users configure any `VectorStore` provider (Azure AI Search, Qdrant, etc.) for facts without writing Memori-specific adapters. The `IStorage` interface and `InMemoryStorage` class have been removed. See `docs/PHASE2.md` for the full architectural rationale.
+This lets users configure any `VectorStore` provider (Azure AI Search, Qdrant, etc.) for facts without writing Memori-specific adapters. The `IStorage` interface and `InMemoryStorage` class have been removed.
 
 ---
 
