@@ -1,5 +1,3 @@
-using Microsoft.Extensions.VectorData;
-
 namespace Memori.Search;
 
 /// <summary>

@@ -1,7 +1,6 @@
 using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
-using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
 
 namespace Memori.Tests;
