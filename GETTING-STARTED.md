@@ -6,8 +6,9 @@ It gives your AI app a persistent, searchable memory layer: capture conversation
 
 ## Why Memori?
 
-- A pluggable `IStorage` abstraction so you bring your own backend (PostgreSQL, SQL Server, Redis, etc.)
-- Built-in `InMemoryStorage` for tests, demos, and local development
+- `IConversationStorage` for conversation/session/entity/process data — bring your own backend
+- `VectorStoreCollection<string, MemoryFactRecord>` for durable fact storage via any `Microsoft.Extensions.VectorData` provider
+- Built-in `InMemoryConversationStorage` and `InMemoryVectorStore` for tests, demos, and local development
 - `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
 - A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
 - `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
@@ -23,33 +24,26 @@ dotnet add package Memori
 Store a fact, recall it, and format a prompt context block.
 
 ```csharp
-using Memori.Embeddings;
 using Memori.Models;
 using Memori.Search;
 using Memori.Storage;
 
-var storage = new InMemoryStorage();
-var embeddings = new DeterministicEmbeddingGenerator();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var entityId = await storage.GetOrCreateEntityAsync("user_123");
-var factEmbedding = await embeddings.GenerateEmbeddingAsync(
-    "The user's favorite color is blue");
-
-await storage.AddFactsAsync(
-    entityId,
-    new[]
-    {
-        new NewMemoryFact(
-            "The user's favorite color is blue",
-            factEmbedding)
-    });
+await factCollection.UpsertAsync(new MemoryFactRecord
+{
+    Id = Guid.NewGuid().ToString("N"),
+    EntityId = "user_123",
+    Content = "The user's favorite color is blue",
+    CreatedAt = DateTimeOffset.UtcNow
+});
 
 var search = new MemorySearchService(
-    storage,
-    embeddings,
-    new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+    factCollection,
+    options: new MemoriOptions { RecallRelevanceThreshold = 0.1 });
 
-var results = await search.RecallAsync(entityId, "What is my favorite color?");
+var results = await search.RecallAsync("user_123", "What is my favorite color?");
 var promptContext = search.FormatPromptContext(results);
 Console.WriteLine(promptContext);
 ```
@@ -63,8 +57,13 @@ using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
 
+var conversationStorage = new InMemoryConversationStorage();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+
 var memori = new Memori.Memori(
-    new InMemoryStorage(),
+    conversationStorage,
+    factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
     augmentationClient: new NullAugmentationClient());
 
@@ -154,17 +153,26 @@ Bind from configuration:
 services.AddMemori(configuration.GetSection("Memori"));
 ```
 
-Supply custom storage, embedding, and augmentation through factories:
+Supply custom conversation storage, embedding, and augmentation through factories:
 
 ```csharp
 services.AddMemori(
-    sp => sp.GetRequiredService<IStorage>(),
-    sp => sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
-    sp => sp.GetRequiredService<IAugmentationClient>(),
-    options =>
+    sp => new MyConversationStorage(),
+    configureOptions: options =>
     {
         options.RecallRelevanceThreshold = 0.2;
     });
+```
+
+For full control including fact collection and embedding generator:
+
+```csharp
+services.AddMemori(
+    conversationStorageFactory: sp => new MyConversationStorage(),
+    factCollectionFactory: sp => myVectorStore.GetCollection<string, MemoryFactRecord>("facts"),
+    embeddingGeneratorFactory: sp => myEmbeddingGenerator,
+    augmentationClientFactory: sp => myAugmentationClient,
+    configureOptions: options => { options.RecallRelevanceThreshold = 0.2; });
 ```
 
 ## Capture Policy
@@ -199,11 +207,26 @@ Formatting is driven by options:
 
 ## Storage
 
-`IStorage` is the extension point for durable memory. The built-in `InMemoryStorage` is suitable for tests and local development. For production, implement `IStorage` in your own package and register it through DI.
+Memori splits persistent storage into two concerns:
+
+### `IConversationStorage`
+
+Covers conversations, sessions, entities, processes, and messages. The built-in `InMemoryConversationStorage` is suitable for tests and local development. For production, implement `IConversationStorage` in your own package and register it through DI.
 
 ```csharp
-services.AddSingleton<IStorage, MyStorage>();
-services.AddMemori(sp => sp.GetRequiredService<IStorage>());
+services.AddSingleton<IConversationStorage, MyConversationStorage>();
+services.AddMemori();
+```
+
+### `VectorStoreCollection<string, MemoryFactRecord>`
+
+Covers durable fact storage with vector and lexical search. Any `VectorStore` provider works directly. The built-in `InMemoryVectorStore` is the default.
+
+For production, register your `VectorStore` provider (e.g., Azure AI Search):
+
+```csharp
+services.AddSingleton<VectorStore>(sp => new MyProductionVectorStore(endpoint, credential));
+services.AddMemori();
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full storage contract and semantics.
@@ -239,10 +262,13 @@ using Memori.Storage;
 using Microsoft.Extensions.AI;
 
 // --- Setup ---
-var storage = new InMemoryStorage();
+var conversationStorage = new InMemoryConversationStorage();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
 var memori = new Memori.Memori(
-    storage,
+    conversationStorage,
+    factCollection,
     new MemoriOptions
     {
         RecallRelevanceThreshold = 0.1,

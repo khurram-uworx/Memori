@@ -13,46 +13,46 @@ Memori is a durable memory layer for AI applications. Its primary concerns are:
 
 The library is built around three extension points:
 
-- `IStorage`: the durable boundary for all persistent state.
+- `IConversationStorage`: the durable boundary for conversation/session/entity/process data.
+- `VectorStoreCollection<string, MemoryFactRecord>`: the durable boundary for fact storage, using `Microsoft.Extensions.VectorData`.
 - `IEmbeddingGenerator<string, Embedding<float>>`: the embedding surface, taken directly from `Microsoft.Extensions.AI`.
 - `IAugmentationClient`: the extraction boundary for turning conversations into structured memory.
 
 ## Design Principles
 
-- **Storage-provider agnostic**: no SQL commands, migrations, connection handles, or provider dialects leak through `IStorage`.
+- **Storage-provider agnostic**: no SQL commands, migrations, connection handles, or provider dialects leak through `IConversationStorage` or the `VectorStore` abstraction.
 - **Microsoft.Extensions.AI native**: `IChatClient` and `IEmbeddingGenerator` are the primary integration surfaces. No provider-specific wrappers.
+- **Microsoft.Extensions.VectorData native**: any `VectorStore` provider works directly for fact storage — no Memori-specific adapter needed.
 - **Facade ergonomics**: the `Memori` class provides attribution, session tracking, capture, recall, and augmentation in one place without forcing callers to wire each service manually.
 - **Explicit ownership**: session timeout, prompt injection placement, capture filtering, and augmentation are all opt-in and configurable.
 - **No first-party database integrations**: PostgreSQL, SQL Server, Cosmos DB, MongoDB, SQLite, Redis, and similar backends are intentionally out of scope for this package.
 
 ## Storage Contract
 
-`IStorage` is the durable boundary. Storage providers should keep provider details behind the interface and expose domain behavior only.
+Memori splits persistent storage into two concerns:
 
-### Core Expectations
+### `IConversationStorage`
 
+The durable boundary for relational/ordered operations. Storage providers should keep provider details behind the interface and expose domain behavior only.
+
+**Core Expectations:**
 - Implementations must be safe for concurrent use by multiple requests.
 - All methods must observe the supplied `CancellationToken`.
 - Public identifiers returned by storage must be stable and non-empty.
 - Get-or-create methods must be idempotent for the same logical identifier.
 - Each operation should be internally atomic from the caller's point of view. The interface intentionally does not expose transactions.
-- Conversation history is durable history. `DeleteEntityMemoriesAsync` deletes memories for recall, not captured conversation messages.
-- Search results should be returned in descending relevance order and must respect `limit` and `candidateLimit`.
+- Conversation history is durable history. Fact deletion does not affect captured conversation messages.
 
-### Domain Objects
-
-`IStorage` stores:
+**Domain Objects:**
 
 - entities
 - processes
 - sessions
 - conversations
 - conversation messages
-- memory facts
-- semantic triples
-- process attributes
+- conversation summaries
 
-### Method Semantics
+**Methods:**
 
 `GetOrCreateEntityAsync(externalId)` creates or returns the durable entity row for an external entity such as a user id. The same `externalId` must always return the same storage id.
 
@@ -68,19 +68,25 @@ The library is built around three extension points:
 
 `UpdateConversationSummaryAsync(conversationId, summary)` stores the latest rolling summary and updates the conversation timestamp.
 
-`AddFactsAsync(entityId, facts, conversationId)` stores facts for entity-scoped recall. It should assign ids and preserve provided timestamps, embeddings, summaries, confidence, memory type, and optional source conversation id.
+### `VectorStoreCollection<string, MemoryFactRecord>`
 
-`SearchFactsAsync(entityId, query, queryEmbedding, limit, candidateLimit)` searches only the given entity's facts. Providers may use lexical, vector, hybrid, or native ranking. Returned `RecallResult` values should include summaries, confidence, memory type, similarity when known, and final rank score.
+The durable boundary for fact storage. This is a standard `Microsoft.Extensions.VectorData` collection — any `VectorStore` provider works directly.
 
-`DeleteEntityMemoriesAsync(entityId)` deletes recall memories for the entity, including facts and semantic triples. It must preserve sessions, conversations, and captured messages.
+**Domain Objects:**
 
-`AddSemanticTriplesAsync(entityId, triples)` stores extracted triples for the entity. Duplicate handling is provider-specific, but repeated calls must be safe.
+- memory facts (with embeddings, confidence, memory type, summaries)
+- semantic triples (stored as `MemoryFactRecord` with `MemoryType = "semantic_triple"`)
+- process attributes (stored as `MemoryFactRecord` with `MemoryType = "process_attribute"`)
 
-`AddProcessAttributesAsync(processId, attributes)` stores extracted attributes for a process. Empty attributes should be ignored.
+**Operations:**
+
+- `UpsertAsync` — insert or update a fact record.
+- `SearchAsync` — search by vector (embedding) or text query with optional filter (e.g., by `EntityId`).
+- `DeleteAsync` — delete by record key.
 
 ### Storage Contract Tests
 
-The test project includes `StorageContractTests`, an abstract NUnit fixture that specifies the expected storage behavior. To test a custom implementation inside this repository, derive from it and return a fresh storage instance:
+The test project includes `ConversationStorageContractTests`, an abstract NUnit fixture that specifies the expected `IConversationStorage` behavior. To test a custom implementation inside this repository, derive from it and return a fresh storage instance:
 
 ```csharp
 using Memori.Abstractions;
@@ -88,14 +94,14 @@ using NUnit.Framework;
 
 namespace Memori.Tests;
 
-public sealed class MyStorageTests : StorageContractTests
+public sealed class MyConversationStorageTests : ConversationStorageContractTests
 {
-    protected override IStorage CreateStorage()
-        => new MyStorage(/* connection or test fixture dependencies */);
+    protected override IConversationStorage CreateConversationStorage()
+        => new MyConversationStorage(/* connection or test fixture dependencies */);
 }
 ```
 
-Each test expects an isolated storage instance. For database-backed providers, create a unique database/schema/container per test or clean all state in `CreateStorage`.
+Each test expects an isolated storage instance. For database-backed providers, create a unique database/schema/container per test or clean all state in `CreateConversationStorage`.
 
 ### Minimal Custom Storage Registration
 
@@ -104,15 +110,22 @@ using Memori;
 using Memori.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
-services.AddSingleton<IStorage, MyStorage>();
-services.AddMemori(sp => sp.GetRequiredService<IStorage>());
+services.AddSingleton<IConversationStorage, MyConversationStorage>();
+services.AddMemori();
 ```
 
-`InMemoryStorage` is the reference behavior for semantics, not a production database driver.
+For production vector stores, register a `VectorStore` provider before calling `AddMemori()`:
+
+```csharp
+services.AddSingleton<VectorStore>(sp => new MyProductionVectorStore(endpoint, credential));
+services.AddMemori();
+```
+
+`InMemoryConversationStorage` and `InMemoryVectorStore` are the reference behaviors for semantics, not production database drivers.
 
 ## Augmentation Pipeline
 
-`IAugmentationClient` turns captured conversation messages into durable memory updates. Memori supplies the conversation context and writes the returned output through `IStorage`.
+`IAugmentationClient` turns captured conversation messages into durable memory updates. Memori supplies the conversation context and writes the returned output through `IConversationStorage` (for summaries) and `VectorStoreCollection<string, MemoryFactRecord>` (for facts, triples, and attributes).
 
 ### Contract
 
@@ -189,10 +202,10 @@ For durable production stores, consider deriving a stable key from entity id, no
 
 ## Recall and Search
 
-`MemorySearchService` orchestrates recall using `IStorage.SearchFactsAsync` and an optional `IEmbeddingGenerator`.
+`MemorySearchService` orchestrates recall using `VectorStoreCollection<string, MemoryFactRecord>.SearchAsync` and an optional `IEmbeddingGenerator`.
 
-- Cosine similarity is used when embeddings are available.
-- Lexical fallback is used when no embedding generator is registered.
+- Vector search via `SearchAsync(ReadOnlyMemory<float>, ...)` when embeddings are available.
+- Lexical search via `SearchAsync(string, ...)` fallback when no embedding generator is registered.
 - Results are filtered by `RecallRelevanceThreshold` and returned in descending relevance order.
 - `FormatPromptContext(...)` renders results as a `<memori_context>` block for prompt injection.
 - `BuildPromptContext(...)` returns structured facts, summaries, rendering metadata, and the final rendered text.
@@ -232,12 +245,13 @@ Prompt injection placement is configurable:
 ## Extension Package Boundaries
 
 - `Memori` (core) has no first-party database dependencies.
-- Storage backends (PostgreSQL, SQL Server, Redis, etc.) are implemented by consuming applications or separate packages.
-- `Microsoft.Extensions.AI` is the only framework dependency in the core package.
+- `IConversationStorage` backends and `VectorStore` providers are implemented by consuming applications or separate packages.
+- `Microsoft.Extensions.AI` and `Microsoft.Extensions.VectorData.Abstractions` are the only framework dependencies in the core package.
 
 ## Implementation Notes
 
-- `InMemoryStorage` uses concurrent collections and is safe for concurrent use.
+- `InMemoryConversationStorage` uses concurrent collections and is safe for concurrent use.
+- `InMemoryVectorStore` is thread-safe and implements the standard `VectorStore` contract.
 - Nullable reference types are enabled throughout; avoid introducing nullability warnings.
 - All async APIs are cancellation-aware and use `ConfigureAwait(false)` in library code.
 - Prefer domain-oriented APIs; do not leak provider-specific storage details into `Memori`.

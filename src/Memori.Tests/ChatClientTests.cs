@@ -2,6 +2,7 @@ using Memori.Abstractions;
 using Memori.Models;
 using Memori.Storage;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
 
 namespace Memori.Tests;
@@ -92,10 +93,15 @@ public class ChatClientTests
         }
     }
 
-    static async Task SeedFactAsync(InMemoryStorage storage, string entityId, string fact)
+    static async Task SeedFactAsync(VectorStoreCollection<string, MemoryFactRecord> factCollection, string entityId, string fact)
     {
-        var storageEntityId = await storage.GetOrCreateEntityAsync(entityId);
-        await storage.AddFactsAsync(storageEntityId, [new NewMemoryFact(fact)]);
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = entityId,
+            Content = fact,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
     }
 
     sealed class CancellableStreamingChatClient : IChatClient
@@ -137,10 +143,18 @@ public class ChatClientTests
         { }
     }
 
+    static (InMemoryConversationStorage, VectorStoreCollection<string, MemoryFactRecord>) CreateStorage()
+    {
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+        return (conversationStorage, factCollection);
+    }
+
     [Test]
     public async Task GetResponseAsync_UsesSharedPromptFormatter()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             PromptContextTagName = "custom_context",
@@ -149,19 +163,18 @@ public class ChatClientTests
             IncludeFactTimestampsInPrompt = true,
             RecallRelevanceThreshold = 0,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(
-            entityId,
-            [
-                new NewMemoryFact(
-                    "The user lives in Karachi.",
-                    summaries: [new MemorySummary("Lives in Karachi.", new DateTimeOffset(2026, 5, 6, 12, 30, 0, TimeSpan.Zero))],
-                    createdAt: new DateTimeOffset(2026, 5, 6, 12, 0, 0, TimeSpan.Zero))
-            ]);
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "The user lives in Karachi.",
+            CreatedAt = new DateTimeOffset(2026, 5, 6, 12, 0, 0, TimeSpan.Zero),
+            Summaries = [new MemorySummary("Lives in Karachi.", new DateTimeOffset(2026, 5, 6, 12, 30, 0, TimeSpan.Zero))]
+        });
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -184,11 +197,11 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_DefaultPromptInjection_InsertsBeforeAllMessages()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage, new MemoriOptions { RecallRelevanceThreshold = 0 });
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection, new MemoriOptions { RecallRelevanceThreshold = 0 });
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
-        await SeedFactAsync(storage, "entity-1", "The user lives in Karachi.");
+        await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -207,16 +220,16 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_PromptInjectionCanRunAfterSystemAndDeveloperMessages()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             RecallRelevanceThreshold = 0,
             PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemAndDeveloperMessages,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
-        await SeedFactAsync(storage, "entity-1", "The user lives in Karachi.");
+        await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -238,17 +251,17 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_PromptInjectionCanUseDeveloperRole()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             RecallRelevanceThreshold = 0,
             PromptInjectionRole = "developer",
             PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemMessages,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
-        await SeedFactAsync(storage, "entity-1", "The user lives in Karachi.");
+        await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -267,16 +280,16 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_PromptInjectionCanBeDisabledSeparatelyFromRecall()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             RecallRelevanceThreshold = 0,
             EnablePromptInjection = false,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
-        await SeedFactAsync(storage, "entity-1", "The user lives in Karachi.");
+        await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -290,16 +303,16 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_PromptInjectionCanMergeWithExistingInstruction()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             RecallRelevanceThreshold = 0,
             PromptInjectionMergeStrategy = PromptInjectionMergeStrategy.AppendToLastMatchingRole,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
-        await SeedFactAsync(storage, "entity-1", "The user lives in Karachi.");
+        await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -320,20 +333,23 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_DoesNotCaptureInjectedMemoryContext()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             StripSystemMessagesOnCapture = false,
             RecallRelevanceThreshold = 0,
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(
-            entityId,
-            [new NewMemoryFact("The user lives in Karachi.")]);
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "The user lives in Karachi.",
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -346,8 +362,8 @@ public class ChatClientTests
 
         await memori.WaitForAugmentationAsync();
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Count, Is.EqualTo(3));
         Assert.That(messages[0].Role, Is.EqualTo(ConversationRoles.System));
@@ -360,7 +376,7 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_CapturePolicyDropsConfiguredRoles()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             StripSystemMessagesOnCapture = false,
@@ -368,7 +384,7 @@ public class ChatClientTests
         options.ExcludedCaptureRoles.Add(ConversationRoles.System);
         options.ExcludedCaptureRoles.Add(ConversationRoles.Tool);
 
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -382,8 +398,8 @@ public class ChatClientTests
                 new ChatMessage(ChatRole.User, "Hello"),
             ]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Select(message => message.Role), Is.EqualTo([
             ConversationRoles.User,
@@ -394,13 +410,13 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_CapturePolicyDropsMessagesUsingCustomPredicate()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             CaptureMessageFilter = message =>
                 !message.Content.Contains("do not store", StringComparison.OrdinalIgnoreCase),
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -413,8 +429,8 @@ public class ChatClientTests
                 new ChatMessage(ChatRole.User, "store this"),
             ]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Any(message => message.Content == "do not store this"), Is.False);
         Assert.That(messages.Any(message => message.Content == "store this"), Is.True);
@@ -424,7 +440,7 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_CapturePolicyRedactsMessagesUsingTransform()
     {
-        var storage = new InMemoryStorage();
+        var (conversationStorage, factCollection) = CreateStorage();
         var options = new MemoriOptions
         {
             CaptureMessageTransform = message => new ConversationMessage(
@@ -434,7 +450,7 @@ public class ChatClientTests
                 message.CreatedAt,
                 message.Metadata),
         };
-        var memori = new Memori(storage, options);
+        var memori = new Memori(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -443,8 +459,8 @@ public class ChatClientTests
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "my secret-token is abc")]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Any(message => message.Content.Contains("secret-token", StringComparison.OrdinalIgnoreCase)), Is.False);
         Assert.That(messages.Any(message => message.Content.Contains("[redacted]", StringComparison.OrdinalIgnoreCase)), Is.True);
@@ -453,8 +469,8 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_CapturePolicyDropsEmptyMessages()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage, new MemoriOptions { DropEmptyMessagesOnCapture = true });
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection, new MemoriOptions { DropEmptyMessagesOnCapture = true });
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -467,8 +483,8 @@ public class ChatClientTests
                 new ChatMessage(ChatRole.User, "store this"),
             ]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages.Any(message => string.IsNullOrWhiteSpace(message.Content)), Is.False);
         Assert.That(messages.Any(message => message.Content == "store this"), Is.True);
@@ -477,8 +493,8 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_InjectsMemoryContextAndCapturesResponse()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage, augmentationClient: new TestAugmentationClient());
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection, augmentationClient: new TestAugmentationClient());
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -489,19 +505,23 @@ public class ChatClientTests
             [new ChatMessage(ChatRole.User, "What do you remember about me?")]);
 
         Assert.That(response.Messages.Single().Text, Is.EqualTo("answer"));
-        //TODO: Fix/Check this Assert.That(inner.LastMessages.Any(message => message.Role == ChatRole.Assistant), Is.True);
 
         await memori.WaitForAugmentationAsync();
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        var facts = await storage.SearchFactsAsync(entityId, "answer", null, 10, 10);
-        Assert.That(facts, Is.Not.Empty);
+
+        // Search for facts in vector store
+        var factResults = new List<MemoryFactRecord>();
+        await foreach (var result in factCollection.SearchAsync("answer", 10, new VectorSearchOptions<MemoryFactRecord> { Filter = r => r.EntityId == "entity-1" }))
+        {
+            factResults.Add(result.Record);
+        }
+        Assert.That(factResults, Is.Not.Empty);
     }
 
     [Test]
     public async Task GetStreamingResponseAsync_CapturesFinalAssistantMessage()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -517,16 +537,16 @@ public class ChatClientTests
         }
 
         Assert.That(updates, Is.Not.Empty);
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages.Any(message => message.Role == ConversationRoles.Assistant), Is.True);
     }
 
     [Test]
     public async Task GetResponseAsync_CapturesProviderResponseMetadata()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -546,8 +566,8 @@ public class ChatClientTests
 
         await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Hello")]);
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         var assistant = messages.Single(message => message.Role == ConversationRoles.Assistant);
 
         Assert.That(assistant.Metadata["memori.provider.response_id"], Is.EqualTo("response-1"));
@@ -560,8 +580,8 @@ public class ChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_CapturesProviderUpdateMetadataAndContinuationTokens()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -585,8 +605,8 @@ public class ChatClientTests
         await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "Hello")]))
         { }
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         var assistant = messages.Single(message => message.Role == ConversationRoles.Assistant);
 
         Assert.That(assistant.Metadata["memori.provider.response_id"], Is.EqualTo("response-1"));
@@ -598,15 +618,18 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_SkipsRecallWhenDisabled()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(
-            entityId,
-            [new NewMemoryFact("The user lives in Karachi.")]);
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "The user lives in Karachi.",
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var client = new MemoriChatClient(inner, memori);
@@ -620,7 +643,6 @@ public class ChatClientTests
             [new ChatMessage(ChatRole.User, "Tell me about Karachi.")],
             options);
 
-        // Verify no system message was injected
         var systemMessages = inner.LastMessages.Where(m => m.Role == ChatRole.System).ToList();
         Assert.That(systemMessages, Is.Empty);
     }
@@ -628,8 +650,8 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_SkipsCaptureWhenDisabled()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -645,9 +667,8 @@ public class ChatClientTests
             [new ChatMessage(ChatRole.User, "Hello")],
             options);
 
-        // Verify no messages were captured
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages, Is.Empty);
     }
@@ -655,8 +676,8 @@ public class ChatClientTests
     [Test]
     public async Task GetResponseAsync_CaptureOnlyMode()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -676,13 +697,11 @@ public class ChatClientTests
             [new ChatMessage(ChatRole.User, "Hello")],
             options);
 
-        // Verify recall did not happen (no system message)
         var systemMessages = inner.LastMessages.Where(m => m.Role == ChatRole.System).ToList();
         Assert.That(systemMessages, Is.Empty);
 
-        // Verify capture happened
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages, Is.Not.Empty);
         Assert.That(messages.Any(m => m.Content == "Hello"), Is.True);
         Assert.That(messages.Any(m => m.Content == "answer"), Is.True);
@@ -691,15 +710,18 @@ public class ChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_SkipsRecallWhenDisabled()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        await storage.AddFactsAsync(
-            entityId,
-            [new NewMemoryFact("The user lives in Karachi.")]);
+        await factCollection.UpsertAsync(new MemoryFactRecord
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            EntityId = "entity-1",
+            Content = "The user lives in Karachi.",
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         var inner = new StreamingRecordingChatClient(
             [new ChatResponseUpdate(ChatRole.Assistant, "streamed answer")]);
@@ -718,7 +740,6 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        // Verify no system message was injected
         var systemMessages = inner.LastMessages.Where(m => m.Role == ChatRole.System).ToList();
         Assert.That(systemMessages, Is.Empty);
     }
@@ -726,8 +747,8 @@ public class ChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_SkipsCaptureWhenDisabled()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -748,9 +769,8 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        // Verify no messages were captured
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
         Assert.That(messages, Is.Empty);
     }
@@ -758,8 +778,8 @@ public class ChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_HandlesMultipleUpdates()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -778,20 +798,18 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        // Verify all updates were yielded
         Assert.That(updates, Has.Count.EqualTo(3));
 
-        // Verify final message was captured
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages.Any(m => m.Role == ConversationRoles.Assistant && m.Content.Contains("Hello")), Is.True);
     }
 
     [Test]
     public async Task GetStreamingResponseAsync_HandlesMultipleAssistantMessages()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -809,20 +827,18 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        // Verify updates were yielded
         Assert.That(updates, Has.Count.EqualTo(2));
 
-        // Verify messages were captured
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages.Count(m => m.Role == ConversationRoles.Assistant), Is.GreaterThanOrEqualTo(1));
     }
 
     [Test]
     public async Task GetStreamingResponseAsync_CapturesUserAndAssistantMessages()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -837,10 +853,9 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
 
-        // Verify both user and assistant messages were captured
         Assert.That(messages.Any(m => m.Role == ConversationRoles.User && m.Content == "question"), Is.True);
         Assert.That(messages.Any(m => m.Role == ConversationRoles.Assistant && m.Content.Contains("response")), Is.True);
     }
@@ -848,8 +863,8 @@ public class ChatClientTests
     [Test]
     public async Task GetStreamingResponseAsync_DoesNotCaptureWhenCancelled()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -876,23 +891,20 @@ public class ChatClientTests
         }
         catch (OperationCanceledException)
         {
-            // Expected
         }
 
-        // Verify partial updates were yielded
         Assert.That(updates, Is.Not.Empty);
 
-        // Verify nothing was captured due to cancellation
-        var conversation = await storage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversation.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("test-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages, Is.Empty);
     }
 
     [Test]
     public async Task GetStreamingResponseAsync_PreservesUpdateOrder()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(storage);
+        var (conversationStorage, factCollection) = CreateStorage();
+        var memori = new Memori(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -911,7 +923,6 @@ public class ChatClientTests
             updates.Add(update);
         }
 
-        // Verify order is preserved
         Assert.That(updates[0].Text, Is.EqualTo("1"));
         Assert.That(updates[1].Text, Is.EqualTo("2"));
         Assert.That(updates[2].Text, Is.EqualTo("3"));

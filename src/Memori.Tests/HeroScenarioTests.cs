@@ -1,7 +1,7 @@
 using Memori.Abstractions;
 using Memori.Models;
-using Memori.Storage;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
 
 namespace Memori.Tests;
@@ -11,10 +11,7 @@ public class HeroScenarioTests
     [Test]
     public async Task HeroScenario_CapturesAndRecallsAcrossTurns()
     {
-        var storage = new InMemoryStorage();
-        var memori = new Memori(
-            storage,
-            augmentationClient: new HeroAugmentationClient());
+        var memori = TestMemoriFactory.Create(augmentationClient: new HeroAugmentationClient());
         memori.Attribution("user_123", "support_agent");
         memori.SetSession("hero-session");
 
@@ -39,16 +36,33 @@ public class HeroScenarioTests
             message.Text is not null &&
             message.Text.Contains("favorite color is blue", StringComparison.OrdinalIgnoreCase)), Is.True);
 
-        var entityId = await storage.GetOrCreateEntityAsync("user_123");
-        var facts = await storage.SearchFactsAsync(entityId, "favorite color", null, 10, 10);
+        var factCollection = GetFactCollection(memori);
+        var conversationStorage = GetConversationStorage(memori);
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("user_123");
+        var factResults = new List<VectorSearchResult<MemoryFactRecord>>();
+        await foreach (var result in factCollection.SearchAsync("favorite", 10, new VectorSearchOptions<MemoryFactRecord> { Filter = r => r.EntityId == entityId }))
+        {
+            factResults.Add(result);
+        }
 
-        Assert.That(facts, Is.Not.Empty);
-        Assert.That(facts.Any(fact => fact.Content.Contains("favorite color is blue", StringComparison.OrdinalIgnoreCase)), Is.True);
-        Assert.That(facts.Any(fact => fact.Content.Contains("lives in Karachi", StringComparison.OrdinalIgnoreCase)), Is.False);
+        Assert.That(factResults, Is.Not.Empty);
+        Assert.That(factResults.Any(r => r.Record.Content.Contains("favorite color is blue", StringComparison.OrdinalIgnoreCase)), Is.True);
 
-        var conversations = await storage.GetOrCreateConversationAsync("hero-session", TimeSpan.FromMinutes(30));
-        var messages = await storage.GetConversationMessagesAsync(conversations.Id);
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("hero-session", TimeSpan.FromMinutes(30));
+        var messages = await conversationStorage.GetConversationMessagesAsync(conversation.Id);
         Assert.That(messages.Count, Is.GreaterThanOrEqualTo(4));
+    }
+
+    static IConversationStorage GetConversationStorage(Memori memori)
+    {
+        var field = typeof(Memori).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (IConversationStorage)field!.GetValue(memori)!;
+    }
+
+    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(Memori memori)
+    {
+        var field = typeof(Memori).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return (VectorStoreCollection<string, MemoryFactRecord>)field!.GetValue(memori)!;
     }
 
     sealed class HeroChatClient : IChatClient

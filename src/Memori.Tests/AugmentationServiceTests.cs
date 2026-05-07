@@ -2,9 +2,8 @@ using Memori.Abstractions;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
+using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
-using System.Collections;
-using System.Reflection;
 
 namespace Memori.Tests;
 
@@ -13,10 +12,12 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WritesAllAugmentationOutputTypes()
     {
-        var storage = new InMemoryStorage();
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        var processId = await storage.GetOrCreateProcessAsync("process-1");
-        var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
+        var processId = await conversationStorage.GetOrCreateProcessAsync("process-1");
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
         var client = new StaticAugmentationClient(
             new AugmentationResult(
                 Facts: [new NewMemoryFact("coffee", memoryType: "preference")],
@@ -24,7 +25,8 @@ public class AugmentationServiceTests
                 ProcessAttributes: ["support", "triage"],
                 ConversationSummary: "The user likes coffee."));
         var service = new AugmentationService(
-            storage,
+            conversationStorage,
+            factCollection,
             client,
             options: new MemoriOptions { RunAugmentationInBackground = false });
 
@@ -35,25 +37,40 @@ public class AugmentationServiceTests
                 conversation.Id,
                 [new ConversationMessage(ConversationRoles.User, "I like coffee.")]));
 
-        var facts = await storage.SearchFactsAsync(entityId, "coffee", null, 10, 10);
-        var triples = getSemanticTriples(storage, entityId);
-        var updatedConversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
+        // Search for facts
+        var factResults = new List<MemoryFactRecord>();
+        await foreach (var result in factCollection.SearchAsync("coffee", 10, new VectorSearchOptions<MemoryFactRecord> { Filter = r => r.EntityId == entityId }))
+        {
+            factResults.Add(result.Record);
+        }
 
-        Assert.That(facts.Any(fact => fact.Content == "coffee" && fact.MemoryType == "preference"), Is.True);
-        Assert.That(triples.Any(triple => triple.ToFactText() == "user likes coffee"), Is.True);
+        // Search for semantic triples
+        var tripleResults = new List<MemoryFactRecord>();
+        await foreach (var result in factCollection.SearchAsync("user likes coffee", 10, new VectorSearchOptions<MemoryFactRecord> { Filter = r => r.EntityId == entityId && r.MemoryType == "semantic_triple" }))
+        {
+            tripleResults.Add(result.Record);
+        }
+
+        var updatedConversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
+
+        Assert.That(factResults.Any(fact => fact.Content == "coffee" && fact.MemoryType == "preference"), Is.True);
+        Assert.That(tripleResults.Any(triple => triple.Content == "user likes coffee"), Is.True);
         Assert.That(updatedConversation.Summary, Is.EqualTo("The user likes coffee."));
     }
 
     [Test]
     public async Task EnqueueAsync_SkipsProcessAttributesWhenNoProcessIdIsAvailable()
     {
-        var storage = new InMemoryStorage();
-        var entityId = await storage.GetOrCreateEntityAsync("entity-1");
-        var conversation = await storage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
+        var conversationStorage = new InMemoryConversationStorage();
+        var vectorStore = new InMemoryVectorStore();
+        var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+        var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
+        var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
         var client = new StaticAugmentationClient(
             new AugmentationResult(ProcessAttributes: ["support"]));
         var service = new AugmentationService(
-            storage,
+            conversationStorage,
+            factCollection,
             client,
             options: new MemoriOptions { RunAugmentationInBackground = false });
 
@@ -65,34 +82,6 @@ public class AugmentationServiceTests
                 [new ConversationMessage(ConversationRoles.User, "hello")]));
 
         Assert.Pass();
-    }
-
-    static IReadOnlyList<SemanticTriple> getSemanticTriples(InMemoryStorage storage, string entityId)
-    {
-        var entitiesField = typeof(InMemoryStorage).GetField(
-            "entities",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        var gateField = typeof(InMemoryStorage).GetField(
-            "gate",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-
-        if (entitiesField is null || gateField is null)
-            return [];
-
-        var gate = gateField.GetValue(storage);
-        if (gate is null)
-            return [];
-
-        lock (gate)
-         {
-             var entities = (IDictionary)entitiesField.GetValue(storage)!;
-             if (!entities.Contains(entityId))
-                 return [];
-
-             var entityState = entities[entityId];
-             var semanticTriplesProperty = entityState.GetType().GetProperty("SemanticTriples");
-             return semanticTriplesProperty?.GetValue(entityState) as IReadOnlyList<SemanticTriple> ?? [];
-         }
     }
 
     sealed class StaticAugmentationClient : IAugmentationClient

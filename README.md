@@ -13,9 +13,10 @@ Memori fills that gap with:
 
 - A `Memori` facade for attribution, session tracking, capture, recall, and augmentation
 - `IChatClient` middleware that wires recall and capture into any provider automatically
-- A pluggable `IStorage` abstraction — bring your own backend
-- Built-in `InMemoryStorage` for tests, demos, and local development
-- No first-party database integrations — implement `IStorage` and pass it in
+- `IConversationStorage` for conversation/session/entity/process data — bring your own backend
+- `VectorStoreCollection<string, MemoryFactRecord>` for durable fact storage via any `Microsoft.Extensions.VectorData` provider
+- Built-in `InMemoryConversationStorage` and `InMemoryVectorStore` for tests, demos, and local development
+- No first-party database integrations — implement `IConversationStorage` and supply a `VectorStore` provider
 
 ## Quick Taste
 
@@ -57,12 +58,10 @@ services.AddMemori(options =>
     options.PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemAndDeveloperMessages;
 });
 
-// Custom storage, embeddings, and augmentation
+// Custom conversation storage, embeddings, and augmentation
 services.AddMemori(
-    sp => sp.GetRequiredService<IStorage>(),
-    sp => sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
-    sp => sp.GetRequiredService<IAugmentationClient>(),
-    options => { options.RecallRelevanceThreshold = 0.2; });
+    sp => new MyConversationStorage(),
+    configureOptions: options => { options.RecallRelevanceThreshold = 0.2; });
 ```
 
 ```csharp
@@ -81,7 +80,7 @@ services.AddMemori(options =>
 ## Documentation
 
 - [GETTING-STARTED.md](GETTING-STARTED.md): installation, Hello World, facade usage, middleware, DI, capture policy, storage, embeddings, and augmentation
-- [ARCHITECTURE.md](ARCHITECTURE.md): design principles, storage contract, augmentation pipeline, recall/search model, middleware semantics, and implementation notes
+- [ARCHITECTURE.md](ARCHITECTURE.md): design principles, storage contract (split into `IConversationStorage` + `VectorStoreCollection`), augmentation pipeline, recall/search model, and middleware semantics
 
 ## Packages
 
@@ -89,17 +88,18 @@ services.AddMemori(options =>
 
 ## Status
 
-Memori is in active early development. Phase 1 is complete:
+Memori is in active early development. Phase 1 (core primitives, `IChatClient` middleware, and augmentation) and Phase 2 Tier 1 (VectorStore foundation) are complete:
 
 - Core memory primitives, the `Memori` facade, and `IChatClient` middleware are implemented.
-- `IStorage` contract with `InMemoryStorage` reference implementation and full contract test suite.
-- Embedding abstraction with `Microsoft.Extensions.AI` adapter and `DeterministicEmbeddingGenerator`.
+- Storage is now split into `IConversationStorage` (conversations, sessions, entities, processes) and `VectorStoreCollection<string, MemoryFactRecord>` (durable facts with vector search).
+- Built-in `InMemoryConversationStorage` and `InMemoryVectorStore` implementations for development and testing.
+- Embedding abstraction with `Microsoft.Extensions.AI` adapter.
 - Recall/search with cosine, lexical, and hybrid ranking.
 - Augmentation boundary with `PromptAugmentationClient` and background augmentation service.
 - Full DI integration with `AddMemori(...)` and `UseMemori(...)`.
-- 66 NUnit tests covering all major paths.
+- 71 NUnit tests covering all major paths.
 
-No first-party database integrations are included. Implement `IStorage` in your own package and pass it to Memori.
+No first-party database integrations are included. Implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
 
 ## Requirements
 
@@ -113,48 +113,6 @@ dotnet build --configuration Release
 dotnet test --configuration Release --verbosity normal
 ```
 
-## Current Low-Level Usage
-
-The current implemented surface can store facts in memory, generate deterministic local embeddings, recall relevant facts, and format a prompt context block.
-
-```csharp
-using Memori.Embeddings;
-using Memori.Models;
-using Memori.Search;
-using Memori.Storage;
-
-var storage = new InMemoryStorage();
-var embeddings = new DeterministicEmbeddingGenerator();
-
-var entityId = await storage.GetOrCreateEntityAsync("user_123");
-var factEmbedding = await embeddings.GenerateEmbeddingAsync(
-    "The user's favorite color is blue");
-
-await storage.AddFactsAsync(
-    entityId,
-    new[]
-    {
-        new NewMemoryFact(
-            "The user's favorite color is blue",
-            factEmbedding)
-    });
-
-var search = new MemorySearchService(
-    storage,
-    embeddings,
-    new MemoriOptions
-    {
-        RecallRelevanceThreshold = 0.1
-    });
-
-var results = await search.RecallAsync(
-    entityId,
-    "What is my favorite color?");
-
-var promptContext = search.FormatPromptContext(results);
-Console.WriteLine(promptContext);
-```
-
 ## Facade Usage
 
 Use `Memori` when you want attribution, session tracking, capture, recall, and optional augmentation in one place.
@@ -164,8 +122,13 @@ using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
 
+var conversationStorage = new InMemoryConversationStorage();
+var vectorStore = new InMemoryVectorStore();
+var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
+
 var memori = new Memori.Memori(
-    new InMemoryStorage(),
+    conversationStorage,
+    factCollection,
     new MemoriOptions
     {
         StripSystemMessagesOnCapture = true
@@ -259,7 +222,6 @@ For dependency injection:
 using Memori;
 using Memori.Abstractions;
 using Memori.Models;
-using Memori.Storage;
 using Microsoft.Extensions.AI;
 
 services.AddMemori(options =>
@@ -278,39 +240,56 @@ You can also bind options from standard .NET configuration:
 services.AddMemori(configuration.GetSection("Memori"));
 ```
 
-Custom storage, embedding, and augmentation implementations can be supplied through factories:
+Custom conversation storage, embedding, and augmentation implementations can be supplied through factories:
 
 ```csharp
 services.AddMemori(
-    sp => sp.GetRequiredService<IStorage>(),
-    sp => sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
-    sp => sp.GetRequiredService<IAugmentationClient>(),
-    options =>
+    sp => new MyConversationStorage(),
+    configureOptions: options =>
     {
         options.RecallRelevanceThreshold = 0.2;
     });
 ```
 
+For full control including a custom fact collection and embedding generator:
+
+```csharp
+services.AddMemori(
+    conversationStorageFactory: sp => new MyConversationStorage(),
+    factCollectionFactory: sp => myVectorStore.GetCollection<string, MemoryFactRecord>("facts"),
+    embeddingGeneratorFactory: sp => myEmbeddingGenerator,
+    augmentationClientFactory: sp => myAugmentationClient,
+    configureOptions: options => { options.RecallRelevanceThreshold = 0.2; });
+```
+
 ## Storage Model
 
-`IStorage` is the extension point for durable memory.
+Memori splits persistent storage into two concerns:
 
-The contract is domain-oriented and async. It stores:
+### `IConversationStorage`
+
+Covers the relational/ordered operations that do not benefit from vector search:
 
 - entities
 - processes
 - sessions
 - conversations
 - conversation messages
-- memory facts
-- semantic triples
-- process attributes
+- conversation summaries
 
-It also owns `SearchFactsAsync`, so each storage provider can use the best native ranking strategy available to that backend.
+`InMemoryConversationStorage` is the reference implementation for tests, demos, and local development. Implement `IConversationStorage` in your own package for production backends.
 
-The library does not expose SQL commands, migrations, connections, transaction handles, or provider dialects.
+### `VectorStoreCollection<string, MemoryFactRecord>`
 
-Storage implementers should start with [ARCHITECTURE.md](ARCHITECTURE.md). The test project also exposes `StorageContractTests`, an abstract NUnit fixture that custom storage tests can derive from inside this repository.
+Covers durable fact storage with vector and lexical search:
+
+- memory facts (with embeddings, confidence, memory type, summaries)
+- semantic triples (stored as `MemoryFactRecord` with `MemoryType = "semantic_triple"`)
+- process attributes (stored as `MemoryFactRecord` with `MemoryType = "process_attribute"`)
+
+This is a standard `Microsoft.Extensions.VectorData` collection. Any `VectorStore` provider (Azure AI Search, Qdrant, etc.) works directly — no Memori-specific adapter needed. `InMemoryVectorStore` ships as the in-memory default.
+
+Storage implementers should start with [ARCHITECTURE.md](ARCHITECTURE.md). The test project also exposes `ConversationStorageContractTests`, an abstract NUnit fixture for `IConversationStorage` implementations.
 
 ## Embeddings
 
