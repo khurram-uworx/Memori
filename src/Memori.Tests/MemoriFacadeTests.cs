@@ -10,7 +10,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
 using NUnit.Framework;
-using System.Linq.Expressions;
 
 namespace Memori.Tests;
 

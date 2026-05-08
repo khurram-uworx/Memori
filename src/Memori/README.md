@@ -55,6 +55,7 @@ Console.WriteLine(search.FormatPromptContext(results));
 ## Facade Usage
 
 ```csharp
+using Memori;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
@@ -63,7 +64,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori.Memori(
+var memori = new Memori(
     conversationStorage,
     factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
@@ -178,7 +179,7 @@ await management.HardDeleteMemoryAsync("fact-id");
 
 ## Status
 
-All Phase 1 and Phase 2 features are implemented: core primitives, storage split, distributed ranking, composite collection, scope isolation, versioning, thread summarization, and memory management. 211 NUnit tests. No first-party database integrations — implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
+Core primitives, distributed ranking, composite collection, scope isolation, versioning, thread summarization, and memory management are all implemented. 211 NUnit tests. No first-party database integrations — implement `IConversationStorage` and supply a `VectorStore` provider in your own package.
 
 ## License
 

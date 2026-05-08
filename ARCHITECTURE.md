@@ -261,9 +261,9 @@ Prompt injection placement is configurable:
 - Recall and delete operations are always scoped to the current attribution entity.
 - Sessions only affect capture grouping and conversation history, not recall scope.
 
-## Tier 3 Features
+## Enterprise Features
 
-Tier 3 adds enterprise-oriented features on top of the core capture/recall/augmentation pipeline. These are opt-in components that build on the existing storage and search abstractions.
+These are opt-in enterprise-oriented components that build on the existing storage and search abstractions.
 
 ### Scope Isolation
 

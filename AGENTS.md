@@ -22,7 +22,7 @@ Primary goals for changes:
   - `Summarization`: `ChatClientThreadSummarizer` implementation.
   - `Versioning`: conflict resolution service.
   - `Management`: `MemoryManagementService` implementation.
-  - `MicrosoftExtensionsAI`: `IChatClient` middleware and DI extensions.
+  - `Extensions`: `IChatClient` middleware and DI extensions.
   - `Memori.cs`: facade entry point.
 - `src/Memori.Tests`: NUnit test suite (211 tests) for facade, storage, augmentation, chat middleware, scope isolation, versioning, distributed ranker, composite collection, memory management, and stress/concurrency.
 - `docs`: design notes and follow-up plans.

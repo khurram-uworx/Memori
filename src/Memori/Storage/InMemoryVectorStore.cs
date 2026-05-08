@@ -48,13 +48,9 @@ file static class VectorStoreSchema
         }
 
         if (result.Count == 0)
-        {
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
                 if (prop.PropertyType == typeof(string))
                     result.Add(prop);
-            }
-        }
 
         return result;
     }
@@ -65,10 +61,8 @@ file static class VectorStoreSchema
         var result = new List<PropertyInfo>();
 
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
             if (prop.GetCustomAttribute<VectorStoreDataAttribute>() is not null)
                 result.Add(prop);
-        }
 
         return result;
     }
@@ -144,10 +138,8 @@ public sealed class InMemoryVectorStore : VectorStore
         lock (gate)
         {
             if (collections.TryRemove(name, out var existing))
-            {
                 if (existing is IDisposable disposable)
                     disposable.Dispose();
-            }
         }
 
         return Task.CompletedTask;
@@ -187,10 +179,8 @@ public sealed class InMemoryVectorStore : VectorStore
             lock (gate)
             {
                 foreach (var value in collections.Values)
-                {
                     if (value is IDisposable disposable)
                         disposable.Dispose();
-                }
 
                 collections.Clear();
             }
@@ -549,9 +539,7 @@ file sealed class InMemoryVectorStoreCollection<TKey, TRecord> : VectorStoreColl
     protected override void Dispose(bool disposing)
     {
         if (disposing)
-        {
             records.Clear();
-        }
     }
 
     static HashSet<string> Tokenize(string text)
