@@ -19,4 +19,8 @@
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.SqliteVec" Version="1.67.1-preview" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Memori\Memori.csproj" />
+  </ItemGroup>
+
 </Project>

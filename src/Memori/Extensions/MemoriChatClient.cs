@@ -372,6 +372,7 @@ public sealed class MemoriChatClient : DelegatingChatClient
         var requestOptions = extractRequestOptions(options);
         var prepared = await prepareMessagesAsync(input, requestOptions, cancellationToken).ConfigureAwait(false);
         var response = await base.GetResponseAsync(prepared, options, cancellationToken).ConfigureAwait(false);
+
         await captureAsync(input, response, requestOptions, cancellationToken).ConfigureAwait(false);
 
         return response;
