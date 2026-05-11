@@ -66,7 +66,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori(
+var memori = new Memori.Memori(
     conversationStorage,
     factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
@@ -225,7 +225,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori(
+var memori = new Memori.Memori(
     conversationStorage,
     factCollection,
     new MemoriOptions
