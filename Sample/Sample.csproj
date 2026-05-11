@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Memori\Memori.csproj" />
+    <ProjectReference Include="..\src\Memori\Memori.csproj" />
   </ItemGroup>
 
 </Project>

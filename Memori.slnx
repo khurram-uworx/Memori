@@ -9,7 +9,7 @@
     <File Path="GETTING-STARTED.md" />
     <File Path="README.md" />
   </Folder>
-  <Project Path="src/Memori.Tests/Memori.Tests.csproj" />
+  <Project Path="Sample/Sample.csproj" />
   <Project Path="src/Memori/Memori.csproj" />
-  <Project Path="src/Sample/Sample.csproj" />
+  <Project Path="tests/Memori.Tests/Memori.Tests.csproj" />
 </Solution>
