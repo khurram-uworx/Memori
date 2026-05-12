@@ -323,6 +323,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full storage contract and semanti
 Memori uses `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` directly.
 
 - `DeterministicEmbeddingGenerator`: dependency-free vectors for tests and local demos
+- `NgramEmbeddingGenerator`: Character n-gram embedding generator for demos and prototyping
 - For lexical-only recall, omit embedding generator registration
 - Production embedding providers are supplied by the consuming application
 

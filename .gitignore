@@ -325,3 +325,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /src/Meridian/appsettings.Development.json
+
+/.memorycode

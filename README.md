@@ -47,7 +47,7 @@ Memori is built around three usage modes that build on each other:
 | **Augmentation** | Background extraction of facts, semantic triples, process attributes, and summaries via `IAugmentationClient` |
 | **Middleware** | `IChatClient` pipeline that recalls, injects, and captures — streaming and non-streaming |
 | **Storage** | `IConversationStorage` for conversations; `VectorStoreCollection<string, MemoryFactRecord>` for facts via any `Microsoft.Extensions.VectorData` provider |
-| **Embeddings** | `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` — bring your own or use `DeterministicEmbeddingGenerator` for tests |
+| **Embeddings** | `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` — bring your own or use `DeterministicEmbeddingGenerator` or `NgramEmbeddingGenerator` for tests or demos |
 | **Scope isolation** | Workspace/team-level partitioning of memory |
 | **Versioning** | Record versioning with last-write-wins, merge, and manual conflict resolution |
 | **Summarization** | `IThreadSummarizer` for rolling conversation summaries via any `IChatClient` |
@@ -71,6 +71,21 @@ dotnet restore
 dotnet build --configuration Release
 dotnet test --configuration Release --verbosity normal
 ```
+
+## Dependencies
+
+Key external packages and version constraints:
+
+| Package | Version | Note |
+|---|---|---|
+| `Microsoft.Extensions.AI` | `10.5.2` | Latest. No constraints. |
+| `Microsoft.Extensions.AI.Abstractions` | `10.5.2` | Latest. No constraints. |
+| `Microsoft.Extensions.Configuration.Binder` | `10.0.7` | Latest. No constraints. |
+| `Microsoft.Extensions.DependencyInjection.Abstractions` | `10.0.7` | Latest. No constraints. |
+| `Microsoft.Extensions.Logging.Abstractions` | `10.0.7` | Latest. No constraints. |
+| `Microsoft.Extensions.Options` | `10.0.7` | Latest. No constraints. |
+| `Microsoft.Extensions.VectorData.Abstractions` | `10.1.0` | Pinned — `10.1.0` is the highest version compatible with `Microsoft.SemanticKernel.Connectors.SqliteVec 1.74.0-preview` at runtime. Newer `10.x` minors add members to `VectorSearchOptions<T>` (e.g. `OldFilter`) that cause `MissingMethodException` in the SK connector. Bump only when the SK connector's minimum dependency moves past `10.1.0`. |
+| `System.Numerics.Tensors` | `10.0.7` | Latest. No constraints. |
 
 ## Learn More
 
