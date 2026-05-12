@@ -18,7 +18,13 @@ public sealed class MemoriOptions
     /// <summary>
     /// Minimum final rank score required for a fact to be considered relevant.
     /// </summary>
-    public double RecallRelevanceThreshold { get; set; } = 0.1;
+    public double RecallRelevanceThreshold { get; set; } = 0.15;
+
+    /// <summary>
+    /// When <see langword="true"/>, <see cref="RecallRelevanceThreshold"/> is effectively set to 0,
+    /// bypassing relevance filtering. Useful for debugging and development.
+    /// </summary>
+    public bool RelaxedMode { get; set; }
 
     /// <summary>
     /// Amount of inactivity after which a new conversation should be opened for the session.
@@ -121,7 +127,7 @@ public sealed class MemoriOptions
     /// Where recalled memory context should be inserted into chat history.
     /// </summary>
     public PromptInjectionPlacement PromptInjectionPlacement { get; set; } =
-        PromptInjectionPlacement.BeforeAllMessages;
+        PromptInjectionPlacement.AfterSystemMessages;
 
     /// <summary>
     /// Whether recalled memory context should be merged into an existing instruction message.

@@ -15,7 +15,7 @@ public static class ChatClientBuilderExtensions
     /// <summary>
     /// Adds Memori middleware to a chat client pipeline.
     /// </summary>
-    public static ChatClientBuilder UseMemori(this ChatClientBuilder builder, Memori memori)
+    public static ChatClientBuilder UseMemori(this ChatClientBuilder builder, MemoriEngine memori)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(memori);
@@ -28,7 +28,7 @@ public static class ChatClientBuilderExtensions
     /// </summary>
     public static ChatClientBuilder UseMemori(
         this ChatClientBuilder builder,
-        Func<IServiceProvider, Memori> memoriFactory)
+        Func<IServiceProvider, MemoriEngine> memoriFactory)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(memoriFactory);
@@ -44,7 +44,7 @@ public static class ChatClientBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         return builder.Use(
             (inner, services)
-            => new MemoriChatClient(inner, services.GetRequiredService<Memori>()));
+            => new MemoriChatClient(inner, services.GetRequiredService<MemoriEngine>()));
     }
 
     /// <summary>
@@ -72,7 +72,7 @@ public static class ChatClientBuilderExtensions
             var augmentationClient = augmentationClientFactory?.Invoke(services);
             var embeddingGenerator = embeddingGeneratorFactory?.Invoke(services);
 
-            var memori = new Memori(
+            var memori = new MemoriEngine(
                 conversationStorage,
                 factCollection,
                 options,

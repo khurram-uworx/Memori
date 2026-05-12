@@ -43,9 +43,7 @@ await factCollection.UpsertAsync(new MemoryFactRecord
     CreatedAt = DateTimeOffset.UtcNow
 });
 
-var search = new MemorySearchService(
-    factCollection,
-    options: new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+var search = new MemorySearchService(factCollection);
 
 var results = await search.RecallAsync("user_123", "What is my favorite color?");
 var promptContext = search.FormatPromptContext(results);
@@ -54,7 +52,7 @@ Console.WriteLine(promptContext);
 
 ## The Memori Facade
 
-The `Memori` class combines attribution, session tracking, capture, recall, and augmentation into a single entry point.
+The `MemoriEngine` class combines attribution, session tracking, capture, recall, and augmentation into a single entry point.
 
 ```csharp
 using Memori;
@@ -66,7 +64,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori.Memori(
+var memori = new MemoriEngine(
     conversationStorage,
     factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
@@ -225,12 +223,11 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori.Memori(
+var memori = new MemoriEngine(
     conversationStorage,
     factCollection,
     new MemoriOptions
     {
-        RecallRelevanceThreshold = 0.1,
         SessionTimeout = TimeSpan.FromMinutes(30)
     },
     augmentationClient: new PromptAugmentationClient(yourChatClient));

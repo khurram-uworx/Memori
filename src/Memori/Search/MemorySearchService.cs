@@ -90,7 +90,10 @@ public sealed class MemorySearchService
         .ThenByDescending(result => result.CreatedAt);
 
     bool isRelevant(RecallResult result)
-        => scoreForThreshold(result) >= options.RecallRelevanceThreshold;
+    {
+        var threshold = options.RelaxedMode ? 0 : options.RecallRelevanceThreshold;
+        return scoreForThreshold(result) >= threshold;
+    }
 
     string formatTimestamp(DateTimeOffset createdAt)
         => createdAt.ToString(options.PromptTimestampFormat, CultureInfo.InvariantCulture).TrimEnd('Z');

@@ -14,7 +14,7 @@ public static class TestMemoriFactory
     /// <summary>
     /// Creates a Memori instance using in-memory implementations for both conversation storage and vector store.
     /// </summary>
-    public static Memori Create(
+    public static MemoriEngine Create(
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
@@ -22,13 +22,13 @@ public static class TestMemoriFactory
         var conversationStorage = new InMemoryConversationStorage();
         var vectorStore = new InMemoryVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
-        return new Memori(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
+        return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
 
     /// <summary>
     /// Creates a Memori instance with a custom conversation storage.
     /// </summary>
-    public static Memori Create(
+    public static MemoriEngine Create(
         IConversationStorage conversationStorage,
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
@@ -36,19 +36,19 @@ public static class TestMemoriFactory
     {
         var vectorStore = new InMemoryVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
-        return new Memori(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
+        return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
 
     /// <summary>
     /// Creates a Memori instance with a custom vector store collection.
     /// </summary>
-    public static Memori Create(
+    public static MemoriEngine Create(
         VectorStoreCollection<string, MemoryFactRecord> factCollection,
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
         var conversationStorage = new InMemoryConversationStorage();
-        return new Memori(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
+        return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
 }

@@ -20,9 +20,8 @@ var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori
 var options = new MemoriOptions
 {
     PromptContextTagName = "custom_context",
-    RecallRelevanceThreshold = 0,
 };
-var memori = new Memori.Memori(conversationStorage, factCollection, options,
+var memori = new MemoriEngine(conversationStorage, factCollection, options,
     augmentationClient: new PromptAugmentationClient(chatClient));
 chatClient = new MemoriChatClient(chatClient, memori);
 builder.Services.AddScoped(_ => memori);

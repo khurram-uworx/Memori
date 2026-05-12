@@ -163,7 +163,7 @@ public class ChatClientTests
             IncludeFactTimestampsInPrompt = true,
             RecallRelevanceThreshold = 0,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -195,10 +195,10 @@ public class ChatClientTests
     }
 
     [Test]
-    public async Task GetResponseAsync_DefaultPromptInjection_InsertsBeforeAllMessages()
+    public async Task GetResponseAsync_DefaultPromptInjection_InsertsAfterSystemMessages()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection, new MemoriOptions { RecallRelevanceThreshold = 0 });
+        var memori = new MemoriEngine(conversationStorage, factCollection, new MemoriOptions { RecallRelevanceThreshold = 0 });
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
         await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
@@ -212,9 +212,9 @@ public class ChatClientTests
                 new ChatMessage(ChatRole.User, "Tell me about Karachi."),
             ]);
 
-        Assert.That(inner.LastMessages[0].Role, Is.EqualTo(ChatRole.System));
-        Assert.That(inner.LastMessages[0].Text, Does.Contain("The user lives in Karachi."));
-        Assert.That(inner.LastMessages[1].Text, Is.EqualTo("Host system instruction."));
+        Assert.That(inner.LastMessages[0].Text, Is.EqualTo("Host system instruction."));
+        Assert.That(inner.LastMessages[1].Role, Is.EqualTo(ChatRole.System));
+        Assert.That(inner.LastMessages[1].Text, Does.Contain("The user lives in Karachi."));
     }
 
     [Test]
@@ -226,7 +226,7 @@ public class ChatClientTests
             RecallRelevanceThreshold = 0,
             PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemAndDeveloperMessages,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
         await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
@@ -258,7 +258,7 @@ public class ChatClientTests
             PromptInjectionRole = "developer",
             PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemMessages,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
         await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
@@ -286,7 +286,7 @@ public class ChatClientTests
             RecallRelevanceThreshold = 0,
             EnablePromptInjection = false,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
         await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
@@ -309,7 +309,7 @@ public class ChatClientTests
             RecallRelevanceThreshold = 0,
             PromptInjectionMergeStrategy = PromptInjectionMergeStrategy.AppendToLastMatchingRole,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
         await SeedFactAsync(factCollection, "entity-1", "The user lives in Karachi.");
@@ -339,7 +339,7 @@ public class ChatClientTests
             StripSystemMessagesOnCapture = false,
             RecallRelevanceThreshold = 0,
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -384,7 +384,7 @@ public class ChatClientTests
         options.ExcludedCaptureRoles.Add(ConversationRoles.System);
         options.ExcludedCaptureRoles.Add(ConversationRoles.Tool);
 
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -416,7 +416,7 @@ public class ChatClientTests
             CaptureMessageFilter = message =>
                 !message.Content.Contains("do not store", StringComparison.OrdinalIgnoreCase),
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -450,7 +450,7 @@ public class ChatClientTests
                 message.CreatedAt,
                 message.Metadata),
         };
-        var memori = new Memori(conversationStorage, factCollection, options);
+        var memori = new MemoriEngine(conversationStorage, factCollection, options);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -470,7 +470,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_CapturePolicyDropsEmptyMessages()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection, new MemoriOptions { DropEmptyMessagesOnCapture = true });
+        var memori = new MemoriEngine(conversationStorage, factCollection, new MemoriOptions { DropEmptyMessagesOnCapture = true });
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -494,7 +494,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_InjectsMemoryContextAndCapturesResponse()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection, augmentationClient: new TestAugmentationClient());
+        var memori = new MemoriEngine(conversationStorage, factCollection, augmentationClient: new TestAugmentationClient());
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -521,7 +521,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_CapturesFinalAssistantMessage()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -546,7 +546,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_CapturesProviderResponseMetadata()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -581,7 +581,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_CapturesProviderUpdateMetadataAndContinuationTokens()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -619,7 +619,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_SkipsRecallWhenDisabled()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -651,7 +651,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_SkipsCaptureWhenDisabled()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -677,7 +677,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_CaptureOnlyMode()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -711,7 +711,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_SkipsRecallWhenDisabled()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -748,7 +748,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_SkipsCaptureWhenDisabled()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -779,7 +779,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_HandlesMultipleUpdates()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -809,7 +809,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_HandlesMultipleAssistantMessages()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -838,7 +838,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_CapturesUserAndAssistantMessages()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -864,7 +864,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_DoesNotCaptureWhenCancelled()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -904,7 +904,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_PreservesUpdateOrder()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -932,7 +932,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_MetadataWithNullValues_OmitsNullKeys()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -969,7 +969,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_MetadataWithNoAdditionalProperties_DoesNotSetThatKey()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -995,7 +995,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_MetadataWithEmptyResponseIds_OmitsStreamingKeys()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -1027,7 +1027,7 @@ public class ChatClientTests
     public async Task GetResponseAsync_WhenNoAttribution_SkipsCaptureGracefully()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         // Deliberately no attribution set
 
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
@@ -1045,7 +1045,7 @@ public class ChatClientTests
     public async Task GetStreamingResponseAsync_WhenNoAttribution_SkipsCaptureGracefully()
     {
         var (conversationStorage, factCollection) = CreateStorage();
-        var memori = new Memori(conversationStorage, factCollection);
+        var memori = new MemoriEngine(conversationStorage, factCollection);
         // Deliberately no attribution set
 
         var inner = new StreamingRecordingChatClient(

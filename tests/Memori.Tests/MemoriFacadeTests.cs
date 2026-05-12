@@ -259,7 +259,7 @@ public class MemoriFacadeTests
         services.AddMemori(conversationStorage, factCollection);
         var provider = services.BuildServiceProvider();
 
-        var memori = provider.GetRequiredService<Memori>();
+        var memori = provider.GetRequiredService<MemoriEngine>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -291,7 +291,7 @@ public class MemoriFacadeTests
         services.AddMemori(conversationStorage, factCollection);
         var provider = services.BuildServiceProvider();
 
-        var memori = provider.GetRequiredService<Memori>();
+        var memori = provider.GetRequiredService<MemoriEngine>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -324,7 +324,7 @@ public class MemoriFacadeTests
         services.AddMemori(_ => generator);
         var provider = services.BuildServiceProvider();
 
-        var memori = provider.GetRequiredService<Memori>();
+        var memori = provider.GetRequiredService<MemoriEngine>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -355,7 +355,7 @@ public class MemoriFacadeTests
         services.AddMemori(_ => augmentation);
         var provider = services.BuildServiceProvider();
 
-        var memori = provider.GetRequiredService<Memori>();
+        var memori = provider.GetRequiredService<MemoriEngine>();
         memori.Attribution("entity-1");
         memori.SetSession("test-session");
 
@@ -571,7 +571,7 @@ public class MemoriFacadeTests
                 PromptContextTagName = "custom_context",
                 RecallRelevanceThreshold = 0,
             };
-            var memori = new Memori(conversationStorage, factCollection, options);
+            var memori = new MemoriEngine(conversationStorage, factCollection, options);
             memori.Attribution("entity-1");
             memori.SetSession("test-session");
             return memori;
@@ -624,7 +624,7 @@ public class MemoriFacadeTests
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var conversationStorage = new InMemoryConversationStorage();
         var management = new MemoryManagementService(factCollection);
-        var memori = new Memori(
+        var memori = new MemoriEngine(
             conversationStorage,
             factCollection,
             memoryManagement: management);
@@ -677,7 +677,7 @@ public class MemoriFacadeTests
     {
         var management = new MemoryManagementService(
             new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
-        var memori = new Memori(
+        var memori = new MemoriEngine(
             new InMemoryConversationStorage(),
             new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"),
             memoryManagement: management);
@@ -792,15 +792,15 @@ public class MemoriFacadeTests
         Assert.That(messages.Any(m => m.Content == "assistant response"), Is.True);
     }
 
-    static IConversationStorage GetConversationStorage(Memori memori)
+    static IConversationStorage GetConversationStorage(MemoriEngine memori)
     {
-        var field = typeof(Memori).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var field = typeof(MemoriEngine).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         return (IConversationStorage)field!.GetValue(memori)!;
     }
 
-    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(Memori memori)
+    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(MemoriEngine memori)
     {
-        var field = typeof(Memori).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var field = typeof(MemoriEngine).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         return (VectorStoreCollection<string, MemoryFactRecord>)field!.GetValue(memori)!;
     }
 

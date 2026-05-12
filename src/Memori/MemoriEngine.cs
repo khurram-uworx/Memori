@@ -4,15 +4,16 @@ using Memori.Management;
 using Memori.Models;
 using Memori.Search;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.VectorData;
 using System.Linq.Expressions;
 
 namespace Memori;
 
 /// <summary>
-/// Main Memori facade for attribution, sessions, and durable conversation capture.
+/// Main MemoriEngine facade for attribution, sessions, and durable conversation capture.
 /// </summary>
-public sealed class Memori
+public sealed class MemoriEngine
 {
     readonly IConversationStorage conversationStorage;
     readonly VectorStoreCollection<string, MemoryFactRecord> factCollection;
@@ -20,6 +21,7 @@ public sealed class Memori
     readonly MemorySearchService memorySearchService;
     readonly AugmentationService? augmentationService;
     readonly IMemoryManagementService? memoryManagement;
+    readonly ILogger? logger;
     readonly object gate = new();
 
     Attribution? attribution;
@@ -73,7 +75,7 @@ public sealed class Memori
     /// <summary>
     /// Creates a new Memori facade.
     /// </summary>
-    public Memori(
+    public MemoriEngine(
         IConversationStorage conversationStorage,
         VectorStoreCollection<string, MemoryFactRecord> factCollection,
         MemoriOptions? options = null,
@@ -81,9 +83,11 @@ public sealed class Memori
         IAugmentationClient? augmentationClient = null,
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         string? scope = null,
-        IMemoryManagementService? memoryManagement = null)
+        IMemoryManagementService? memoryManagement = null,
+        ILogger<MemoriEngine>? logger = null)
     {
         this.conversationStorage = conversationStorage ?? throw new ArgumentNullException(nameof(conversationStorage));
+        this.logger = logger;
         this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
         this.options = options ?? new MemoriOptions();
         this.options.Validate();
@@ -219,7 +223,10 @@ public sealed class Memori
         }
 
         if (currentAttribution is null)
+        {
+            logger?.LogWarning("CaptureAsync was called without attribution set. Use Attribution(entityId) before CaptureAsync to persist conversation data.");
             return;
+        }
 
         currentSessionId ??= NewSession();
 

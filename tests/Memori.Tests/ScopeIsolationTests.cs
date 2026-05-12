@@ -145,15 +145,15 @@ public sealed class ScopeIsolationTests
         Assert.That(remainingFact!.Content, Is.EqualTo("tea"));
     }
 
-    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(Memori memori)
+    static VectorStoreCollection<string, MemoryFactRecord> GetFactCollection(MemoriEngine memori)
     {
-        var field = typeof(Memori).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var field = typeof(MemoriEngine).GetField("factCollection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         return (VectorStoreCollection<string, MemoryFactRecord>)field!.GetValue(memori)!;
     }
 
-    static IConversationStorage GetConversationStorage(Memori memori)
+    static IConversationStorage GetConversationStorage(MemoriEngine memori)
     {
-        var field = typeof(Memori).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var field = typeof(MemoriEngine).GetField("conversationStorage", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         return (IConversationStorage)field!.GetValue(memori)!;
     }
 }

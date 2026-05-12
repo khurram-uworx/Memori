@@ -266,12 +266,12 @@ public sealed class MemoriChatClient : DelegatingChatClient
     /// </summary>
     public const string MemoriRequestOptionsKey = "memori_request_options";
 
-    readonly Memori memori;
+    readonly MemoriEngine memori;
 
     /// <summary>
     /// Creates a new Memori chat client wrapper.
     /// </summary>
-    public MemoriChatClient(IChatClient innerClient, Memori memori) : base(innerClient)
+    public MemoriChatClient(IChatClient innerClient, MemoriEngine memori) : base(innerClient)
     {
         this.memori = memori ?? throw new ArgumentNullException(nameof(memori));
     }

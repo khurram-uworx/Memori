@@ -44,9 +44,7 @@ await factCollection.UpsertAsync(new MemoryFactRecord
     CreatedAt = DateTimeOffset.UtcNow
 });
 
-var search = new MemorySearchService(
-    factCollection,
-    options: new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+var search = new MemorySearchService(factCollection);
 
 var results = await search.RecallAsync(entityId, "What is my favorite color?");
 Console.WriteLine(search.FormatPromptContext(results));
@@ -64,7 +62,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori(
+var memori = new MemoriEngine(
     conversationStorage,
     factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },

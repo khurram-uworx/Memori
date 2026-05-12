@@ -10,6 +10,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.VectorData;
 
 namespace Memori;
@@ -62,13 +63,14 @@ public static class ServiceCollectionExtensions
             var collection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
             return collection;
         });
-        services.TryAddSingleton(sp => new Memori(
+        services.TryAddSingleton(sp => new MemoriEngine(
             sp.GetRequiredService<IConversationStorage>(),
             sp.GetRequiredService<VectorStoreCollection<string, MemoryFactRecord>>(),
             sp.GetRequiredService<MemoriOptions>(),
             augmentationClient: sp.GetRequiredService<IAugmentationClient>(),
             embeddingGenerator: sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>(),
-            memoryManagement: sp.GetService<IMemoryManagementService>()));
+            memoryManagement: sp.GetService<IMemoryManagementService>(),
+            logger: sp.GetService<ILogger<MemoriEngine>>()));
 
         services.TryAddSingleton<VersioningService>();
         services.TryAddSingleton<IMemoryManagementService, MemoryManagementService>();
@@ -261,9 +263,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Resolves a configured Memori facade from a service provider.
     /// </summary>
-    public static Memori CreateMemori(this IServiceProvider services)
+    public static MemoriEngine CreateMemori(this IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        return services.GetRequiredService<Memori>();
+        return services.GetRequiredService<MemoriEngine>();
     }
 }
