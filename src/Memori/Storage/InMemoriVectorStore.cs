@@ -76,7 +76,7 @@ file static class VectorStoreSchema
 /// reference behavior for custom vector store providers. It is not durable across
 /// process restarts.
 /// </remarks>
-public sealed class InMemoryVectorStore : VectorStore
+public sealed class InMemoriVectorStore : VectorStore
 {
     readonly ConcurrentDictionary<string, object> collections = new(StringComparer.Ordinal);
     readonly object gate = new();
@@ -165,7 +165,7 @@ public sealed class InMemoryVectorStore : VectorStore
     {
         ArgumentNullException.ThrowIfNull(serviceType);
 
-        if (serviceType == typeof(InMemoryVectorStore) || serviceType == typeof(VectorStore))
+        if (serviceType == typeof(InMemoriVectorStore) || serviceType == typeof(VectorStore))
             return this;
 
         return null;

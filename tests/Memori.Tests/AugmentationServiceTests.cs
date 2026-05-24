@@ -14,8 +14,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WritesAllAugmentationOutputTypes()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var processId = await conversationStorage.GetOrCreateProcessAsync("process-1");
@@ -63,8 +63,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_SkipsProcessAttributesWhenNoProcessIdIsAvailable()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -89,8 +89,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithVersioningService_NewFactSetsVersionToOne()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -115,8 +115,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithVersioningService_SameFactIncrementsVersion()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -146,8 +146,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithVersioningService_MergeStrategy_PreservesPreviousVersionLink()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -183,8 +183,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithoutVersioningService_ExistingTestsStillPass()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -211,8 +211,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithThreadSummarizer_StoresSummaryFact()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -248,8 +248,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithoutThreadSummarizer_DoesNotStoreSummaryFact()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var conversation = await conversationStorage.GetOrCreateConversationAsync("session-1", TimeSpan.FromMinutes(30));
@@ -277,8 +277,8 @@ public class AugmentationServiceTests
     [Test]
     public async Task EnqueueAsync_WithThreadSummarizerError_DoesNotCrashPipeline()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var entityId = await conversationStorage.GetOrCreateEntityAsync("entity-1");
         var processId = await conversationStorage.GetOrCreateProcessAsync("process-1");

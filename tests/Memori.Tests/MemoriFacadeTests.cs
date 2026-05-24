@@ -252,8 +252,8 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithExplicitStorageAndNoEmbeddingGenerator_UsesLexicalFallback()
     {
         var services = new ServiceCollection();
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
         services.AddMemori(conversationStorage, factCollection);
@@ -284,8 +284,8 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomStorageFactory_UsesProvidedStorage()
     {
         var services = new ServiceCollection();
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
         services.AddMemori(conversationStorage, factCollection);
@@ -315,8 +315,8 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomEmbeddingFactory_UsesProvidedGenerator()
     {
         var services = new ServiceCollection();
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var generator = new TrackingEmbeddingGenerator();
 
@@ -346,8 +346,8 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCustomAugmentationFactory_UsesProvidedClient()
     {
         var services = new ServiceCollection();
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var augmentation = new TrackingAugmentationClient();
 
@@ -373,8 +373,8 @@ public class MemoriFacadeTests
     public async Task AddMemori_WithCommonFactories_ResolvesCompleteGraphAndHonorsFactories()
     {
         var services = new ServiceCollection();
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var generator = new TrackingEmbeddingGenerator();
         var augmentation = new TrackingAugmentationClient();
@@ -504,7 +504,7 @@ public class MemoriFacadeTests
     {
         var services = new ServiceCollection();
         var custom = new MemoryManagementService(
-            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
+            new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
         services.AddSingleton<IMemoryManagementService>(custom);
         services.AddMemori();
         var provider = services.BuildServiceProvider();
@@ -558,8 +558,8 @@ public class MemoriFacadeTests
     [Test]
     public async Task UseMemori_WithCustomFactories_UsesConfiguredMemori()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         var inner = new RecordingChatClient(new ChatResponse(new ChatMessage(ChatRole.Assistant, "answer")));
         var factoryCalled = false;
@@ -599,8 +599,8 @@ public class MemoriFacadeTests
     public void AddMemori_WithCompositeCollectionFactory_UsesProvidedCollection()
     {
         var services = new ServiceCollection();
-        var vectorStore1 = new InMemoryVectorStore();
-        var vectorStore2 = new InMemoryVectorStore();
+        var vectorStore1 = new InMemoriVectorStore();
+        var vectorStore2 = new InMemoriVectorStore();
         var collection1 = vectorStore1.GetCollection<string, MemoryFactRecord>("primary");
         var collection2 = vectorStore2.GetCollection<string, MemoryFactRecord>("secondary");
 
@@ -620,9 +620,9 @@ public class MemoriFacadeTests
     [Test]
     public async Task MemoriFacade_MemoryManagementMethods_WorkWhenServiceIsConfigured()
     {
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
-        var conversationStorage = new InMemoryConversationStorage();
+        var conversationStorage = new InMemoriConversationStorage();
         var management = new MemoryManagementService(factCollection);
         var memori = new MemoriEngine(
             conversationStorage,
@@ -676,10 +676,10 @@ public class MemoriFacadeTests
     public async Task MemoriFacade_MemoryManagementMethods_ThrowWhenNoAttribution()
     {
         var management = new MemoryManagementService(
-            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
+            new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"));
         var memori = new MemoriEngine(
-            new InMemoryConversationStorage(),
-            new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"),
+            new InMemoriConversationStorage(),
+            new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("memori_facts"),
             memoryManagement: management);
 
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>

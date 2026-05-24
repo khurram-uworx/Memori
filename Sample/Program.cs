@@ -14,8 +14,8 @@ IChatClient chatClient = new OllamaApiClient(new Uri("http://localhost:11434"),
 IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator = new OllamaApiClient(new Uri("http://localhost:11434"),
     "all-minilm");
 
-var conversationStorage = new InMemoryConversationStorage();
-var vectorStore = new InMemoryVectorStore();
+var conversationStorage = new InMemoriConversationStorage();
+var vectorStore = new InMemoriVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 var options = new MemoriOptions
 {

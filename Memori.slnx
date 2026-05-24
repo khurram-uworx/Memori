@@ -11,5 +11,6 @@
   </Folder>
   <Project Path="Sample/Sample.csproj" />
   <Project Path="src/Memori/Memori.csproj" />
+  <Project Path="src/Memori.Mcp/Memori.Mcp.csproj" />
   <Project Path="tests/Memori.Tests/Memori.Tests.csproj" />
 </Solution>

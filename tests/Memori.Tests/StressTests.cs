@@ -93,9 +93,9 @@ public class StressTests
     [Test]
     public async Task ConcurrentMemoryManagementOperations_DoNotThrow()
     {
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
-        var conversationStorage = new InMemoryConversationStorage();
+        var conversationStorage = new InMemoriConversationStorage();
         var management = new MemoryManagementService(factCollection);
         var memori = new MemoriEngine(
             conversationStorage,

@@ -73,6 +73,20 @@ public sealed class MemoriEngine
     }
 
     /// <summary>
+    /// Gets the memory management service for inspecting and modifying stored memories.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the service is not configured.</exception>
+    public IMemoryManagementService MemoryManagement
+    {
+        get
+        {
+            var service = memoryManagement;
+            return service ?? throw new InvalidOperationException(
+                "IMemoryManagementService is not configured. Register it via DI or pass it to the MemoriEngine constructor.");
+        }
+    }
+
+    /// <summary>
     /// Creates a new Memori facade.
     /// </summary>
     public MemoriEngine(

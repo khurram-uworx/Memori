@@ -32,7 +32,7 @@ public class PromptContextFormattingTests
             PromptSummariesHeading = "Summaries:",
             RecallRelevanceThreshold = 0,
         };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -57,7 +57,7 @@ public class PromptContextFormattingTests
     [Test]
     public void FormatPromptContext_MatchesStructuredRenderedText()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
         var results = new[] { createResult() };
 
         var structured = search.BuildPromptContext(results);
@@ -79,7 +79,7 @@ public class PromptContextFormattingTests
             PromptSummariesHeading = "Memory summaries:",
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -98,7 +98,7 @@ public class PromptContextFormattingTests
         {
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -109,7 +109,7 @@ public class PromptContextFormattingTests
     [Test]
     public void BuildPromptContext_WithEmptyResults_ReturnsEmptyRenderedText()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
 
         var context = search.BuildPromptContext([]);
 
@@ -121,7 +121,7 @@ public class PromptContextFormattingTests
     [Test]
     public void BuildPromptContext_WithNullResults_Throws()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
 
         Assert.That(() => search.BuildPromptContext(null!), Throws.ArgumentNullException);
     }
@@ -130,7 +130,7 @@ public class PromptContextFormattingTests
     public void BuildPromptContext_WithSpecialCharactersInContent_DoesNotFail()
     {
         var options = new MemoriOptions { PromptTimestampFormat = "yyyy-MM-dd" };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
         var result = new RecallResult(
             "fact-1",
             "The user said price was <$100 & >$50 (100% sure) with \"special\" chars.",
@@ -152,7 +152,7 @@ public class PromptContextFormattingTests
             PromptFactBullet = "  *  ",
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -167,7 +167,7 @@ public class PromptContextFormattingTests
             PromptContextTagName = "  my_context  ",
             PromptTimestampFormat = "yyyy-MM-dd",
         };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var context = search.BuildPromptContext([createResult()]);
 
@@ -178,7 +178,7 @@ public class PromptContextFormattingTests
     [Test]
     public void FormatPromptContext_WithEmptyResults_ReturnsEmptyString()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
 
         var rendered = search.FormatPromptContext([]);
 
@@ -188,7 +188,7 @@ public class PromptContextFormattingTests
     [Test]
     public void FormatPromptContext_WithNullResults_Throws()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
 
         Assert.That(() => search.FormatPromptContext(null!), Throws.ArgumentNullException);
     }
@@ -196,7 +196,7 @@ public class PromptContextFormattingTests
     [Test]
     public void FormatFactLines_WithEmptyResults_ReturnsEmpty()
     {
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"));
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"));
 
         var lines = search.FormatFactLines([]);
 
@@ -207,7 +207,7 @@ public class PromptContextFormattingTests
     public void FormatSummaryLines_ReturnsEmptyWhenSummariesDisabled()
     {
         var options = new MemoriOptions { IncludeSummariesInPrompt = false };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
 
         var lines = search.FormatSummaryLines([createResult()]);
 
@@ -218,7 +218,7 @@ public class PromptContextFormattingTests
     public void FormatSummaryLines_DeduplicatesDuplicateSummaries()
     {
         var options = new MemoriOptions { IncludeSummariesInPrompt = true };
-        var search = new MemorySearchService(new InMemoryVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
+        var search = new MemorySearchService(new InMemoriVectorStore().GetCollection<string, MemoryFactRecord>("test"), options: options);
         var result = new RecallResult(
             "fact-1",
             "The user lives in Karachi.",

@@ -61,6 +61,59 @@ No first-party database integrations are included. Implement `IConversationStora
 | Package | NuGet |
 |---|---|
 | [Memori](https://www.nuget.org/packages/Memori) | [![NuGet](https://img.shields.io/nuget/v/Memori)](https://www.nuget.org/packages/Memori) |
+| [Memori.Mcp](https://www.nuget.org/packages/Memori.Mcp) | [![NuGet](https://img.shields.io/nuget/v/Memori.Mcp)](https://www.nuget.org/packages/Memori.Mcp) — MCP server + CLI tool (includes SQLite durable storage) |
+
+### MCP Server
+
+Run Memori as a [Model Context Protocol](https://modelcontextprotocol.io) server to give AI coding agents durable memory:
+
+```bash
+# Ephemeral (in-memory) mode
+npx -y @uworx/memori
+
+# Durable (SQLite) mode — persists across sessions
+npx -y @uworx/memori --long --path ./project-memories
+```
+
+Register the server in your MCP client:
+
+**Cursor:**
+```json
+{
+  "mcpServers": {
+    "memori": {
+      "command": "npx",
+      "args": ["-y", "@uworx/memori", "--long"]
+    }
+  }
+}
+```
+
+**VS Code (Cline):**
+```json
+{
+  "mcpServers": {
+    "memori": {
+      "command": "npx",
+      "args": ["-y", "@uworx/memori", "--long"]
+    }
+  }
+}
+```
+
+**Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "memori": {
+      "command": "npx",
+      "args": ["-y", "@uworx/memori", "--long"]
+    }
+  }
+}
+```
+
+The MCP server exposes seven tools: `memori_remember`, `memori_search`, `memori_list`, `memori_get`, `memori_update`, `memori_delete`, and `memori_clear`.
 
 ## Requirements
 

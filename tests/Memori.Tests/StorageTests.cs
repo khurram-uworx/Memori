@@ -256,9 +256,9 @@ public abstract class ConversationStorageContractTests
 }
 
 /// <summary>
-/// Contract tests for the reference <see cref="InMemoryConversationStorage"/> implementation.
+/// Contract tests for the reference <see cref="InMemoriConversationStorage"/> implementation.
 /// </summary>
 public sealed class InMemoryConversationStorageTests : ConversationStorageContractTests
 {
-    protected override IConversationStorage CreateConversationStorage() => new InMemoryConversationStorage();
+    protected override IConversationStorage CreateConversationStorage() => new InMemoriConversationStorage();
 }

@@ -19,8 +19,8 @@ public static class TestMemoriFactory
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
@@ -34,7 +34,7 @@ public static class TestMemoriFactory
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
@@ -48,7 +48,7 @@ public static class TestMemoriFactory
         IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null,
         MemoriOptions? options = null)
     {
-        var conversationStorage = new InMemoryConversationStorage();
+        var conversationStorage = new InMemoriConversationStorage();
         return new MemoriEngine(conversationStorage, factCollection, options, augmentationClient: augmentationClient, embeddingGenerator: embeddingGenerator);
     }
 }

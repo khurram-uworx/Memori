@@ -54,12 +54,12 @@ public static class ServiceCollectionExtensions
 
     static IServiceCollection addCoreServices(IServiceCollection services)
     {
-        services.TryAddSingleton<IConversationStorage, InMemoryConversationStorage>();
+        services.TryAddSingleton<IConversationStorage, InMemoriConversationStorage>();
         services.TryAddSingleton<IAugmentationClient, NullAugmentationClient>();
         services.TryAddSingleton<MemorySearchService>();
         services.TryAddSingleton(sp =>
         {
-            var vectorStore = new InMemoryVectorStore();
+            var vectorStore = new InMemoriVectorStore();
             var collection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
             return collection;
         });

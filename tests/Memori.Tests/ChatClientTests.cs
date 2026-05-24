@@ -143,10 +143,10 @@ public class ChatClientTests
         { }
     }
 
-    static (InMemoryConversationStorage, VectorStoreCollection<string, MemoryFactRecord>) CreateStorage()
+    static (InMemoriConversationStorage, VectorStoreCollection<string, MemoryFactRecord>) CreateStorage()
     {
-        var conversationStorage = new InMemoryConversationStorage();
-        var vectorStore = new InMemoryVectorStore();
+        var conversationStorage = new InMemoriConversationStorage();
+        var vectorStore = new InMemoriVectorStore();
         var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         return (conversationStorage, factCollection);
     }

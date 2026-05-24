@@ -10,7 +10,7 @@ public sealed class MemoryManagementTests
 {
     static MemoryManagementService CreateService(out VectorStoreCollection<string, MemoryFactRecord> factCollection)
     {
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = new InMemoriVectorStore();
         factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
         return new MemoryManagementService(factCollection);
     }

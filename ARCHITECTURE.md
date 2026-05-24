@@ -325,9 +325,52 @@ Summaries can be stored as `MemoryFactRecord` entries and participate in recall.
 
 `MemoryManagementService` is the default implementation backed by a `VectorStoreCollection<string, MemoryFactRecord>`. The `Memori` facade exposes convenience methods (`ListMemoriesAsync`, `SearchMemoriesAsync`, etc.) that auto-scope to the current attribution entity when the management service is registered.
 
+## MCP Server Layer
+
+`Memori.Mcp` wraps the `Memori` facade as a [Model Context Protocol](https://modelcontextprotocol.io) server over STDIO transport.
+
+### Architecture
+
+```
+Agent Runtime (Cursor, Claude, VS Code)
+       │  STDIO
+       ▼
+┌────────────────────┐
+│   memori-mcp CLI   │  Entry point (dotnet tool / npx)
+├────────────────────┤
+│  CliParser         │  Arg parsing (--mode, --path, --verbose)
+│  MemoriMcpServer   │  MCP protocol + DI wiring
+│  MemoryTools       │  7 [McpTool] methods
+└────────┬───────────┘
+         │
+    ┌────┴────┐
+    │ Memori  │  Core library (MemoriEngine, IConversationStorage, VectorStoreCollection)
+    └─────────┘
+```
+
+### MCP Tools
+
+Tools are defined in `MemoryTools.cs` using the `[McpServerTool]` attribute from `ModelContextProtocol`. Each tool:
+
+- Wraps a `MemoriEngine` method (CaptureAsync, RecallAsync, MemoryManagement, etc.)
+- Accepts `CancellationToken` for cancellation
+- Returns a JSON-serialized response (success or error shape)
+- Auto-creates attribution and session when needed
+
+### Two Modes
+
+| Mode | Storage | Use case |
+|---|---|---|
+| **Ephemeral** | `InMemoryConversationStorage` + `InMemoryVectorStore` (SK connector) | Quick dev, no persistence needed |
+| **Durable** | `SqliteConversationStorage` + `SqliteVectorStore` with FTS5 | Repo-local persistent memory |
+
+When `--mode durable` is set, `Memori.Mcp` provides SQLite-backed storage (`Memori.Mcp.Storage` namespace) with FTS5 lexical search. The database file is created automatically at the configured path.
+
 ## Extension Package Boundaries
 
 - `Memori` (core) has no first-party database dependencies.
+- `Memori.Mcp` bundles SQLite-backed `IConversationStorage` and `VectorStoreCollection` (in `Memori.Mcp.Storage`) with FTS5 search.
+- `Memori.Mcp` provides the MCP server layer and is published as both a NuGet library and a dotnet tool.
 - `IConversationStorage` backends and `VectorStore` providers are implemented by consuming applications or separate packages.
 - `Microsoft.Extensions.AI` and `Microsoft.Extensions.VectorData.Abstractions` are the only framework dependencies in the core package.
 

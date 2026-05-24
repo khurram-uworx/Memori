@@ -1,5 +1,5 @@
-﻿using Sample.Services.Ingestion;
 using Microsoft.Extensions.VectorData;
+using Sample.Services.Ingestion;
 
 namespace Sample.Services;
 
@@ -10,7 +10,7 @@ public class SemanticSearch(
 {
     private Task? _ingestionTask;
 
-    public async Task LoadDocumentsAsync() => await ( _ingestionTask ??= dataIngestor.IngestDataAsync(ingestionDirectory, searchPattern: "*.*"));
+    public async Task LoadDocumentsAsync() => await (_ingestionTask ??= dataIngestor.IngestDataAsync(ingestionDirectory, searchPattern: "*.*"));
 
     public async Task<IReadOnlyList<IngestedChunk>> SearchAsync(string text, string? documentIdFilter, int maxResults)
     {

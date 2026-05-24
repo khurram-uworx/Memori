@@ -15,7 +15,7 @@ public class CompositeMemoryCollectionTests
 
     static VectorStoreCollection<string, MemoryFactRecord> CreateBackend(string name)
     {
-        var store = new InMemoryVectorStore();
+        var store = new InMemoriVectorStore();
         return store.GetCollection<string, MemoryFactRecord>(name);
     }
 

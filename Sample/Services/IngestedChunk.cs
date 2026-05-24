@@ -1,5 +1,5 @@
-﻿using System.Text.Json.Serialization;
 using Microsoft.Extensions.VectorData;
+using System.Text.Json.Serialization;
 
 namespace Sample.Services;
 

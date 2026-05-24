@@ -11,7 +11,7 @@ namespace Memori.Storage;
 /// reference behavior for custom storage providers. It is not durable across
 /// process restarts.
 /// </remarks>
-public sealed class InMemoryConversationStorage : IConversationStorage
+public sealed class InMemoriConversationStorage : IConversationStorage
 {
     sealed class EntityState(string id, string? scope)
     {
@@ -66,7 +66,7 @@ public sealed class InMemoryConversationStorage : IConversationStorage
     /// <summary>
     /// Creates a new in-memory conversation storage instance.
     /// </summary>
-    public InMemoryConversationStorage()
+    public InMemoriConversationStorage()
     {
     }
 

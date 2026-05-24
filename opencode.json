@@ -5,9 +5,24 @@
       "type": "remote",
       "url": "https://learn.microsoft.com/api/mcp"
     },
+    "code-memory": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@uworx/code-memory"
+      ]
+    },
     "memori": {
-      "type": "remote",
-      "url": "http://localhost:4792/api/mcp/codememory"
+      "type": "local",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        ".\\src\\Memori.Mcp\\Memori.Mcp.csproj",
+        "--long",
+        "--vectors",
+        "--verbose"
+      ]
     }
   }
 }

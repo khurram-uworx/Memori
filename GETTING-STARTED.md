@@ -382,6 +382,54 @@ await management.RestoreMemoryAsync("fact-id");
 await management.HardDeleteMemoryAsync("fact-id");
 ```
 
+## Running as MCP Server
+
+Memori ships a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes durable memory as MCP tools for AI coding agents.
+
+### Quick Start
+
+```bash
+# Install the dotnet tool
+dotnet tool install -g Memori.Mcp --prerelease
+
+# Run in ephemeral mode (in-memory, no persistence)
+memori-mcp
+
+# Run in durable mode (SQLite, persists across sessions)
+memori-mcp --long
+
+# Custom storage path
+memori-mcp --long --path ./my-memories
+
+# Enable debug logging
+memori-mcp --verbose
+```
+
+Or via NPM:
+
+```bash
+npx -y @uworx/memori --long
+```
+
+### Available Tools
+
+Once connected, the MCP server exposes these tools:
+
+| Tool | Description |
+|---|---|
+| `memori_remember` | Store a fact about the current entity |
+| `memori_search` | Semantic + lexical search across stored memories |
+| `memori_list` | List all memories for the current entity (with pagination) |
+| `memori_get` | Get a single memory record by ID |
+| `memori_update` | Update an existing memory's content |
+| `memori_delete` | Soft-delete a memory record |
+| `memori_clear` | Clear all memories for the current entity |
+
+### Modes
+
+- **Ephemeral** (default): all data in memory, lost on restart. No dependencies beyond the .NET SDK.
+- **Durable**: uses SQLite with FTS5 for persistent, searchable storage. The database file is created at the configured path (defaults to `.memori/memori.db`).
+
 ## Next Steps
 
 - [README.md](README.md) — full feature surface, package overview, and quick taste

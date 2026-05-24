@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Memori\Memori.csproj" />
+    <ProjectReference Include="..\..\src\Memori.Mcp\Memori.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

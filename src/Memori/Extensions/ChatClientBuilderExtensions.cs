@@ -85,7 +85,7 @@ public static class ChatClientBuilderExtensions
 
     static VectorStoreCollection<string, MemoryFactRecord> CreateDefaultFactCollection(IServiceProvider services)
     {
-        var vectorStore = new InMemoryVectorStore();
+        var vectorStore = new InMemoriVectorStore();
         return vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
     }
 }
