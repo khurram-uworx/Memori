@@ -89,10 +89,10 @@ public sealed class McpCliTests
     }
 
     [Test]
-    public void Parse_vectors_sets_enableVectors()
+    public void Parse_fulltext_sets_enableFullText()
     {
-        var (_, _, _, enableVectors) = CliParser.Parse(["--vectors"]);
-        Assert.That(enableVectors, Is.True);
+        var (_, _, _, enableFullText) = CliParser.Parse(["--fulltext"]);
+        Assert.That(enableFullText, Is.True);
     }
 
     [Test]

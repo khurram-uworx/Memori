@@ -15,14 +15,22 @@
     "memori": {
       "type": "local",
       "command": [
-        "dotnet",
-        "run",
-        "--project",
-        ".\\src\\Memori.Mcp\\Memori.Mcp.csproj",
-        "--long",
-        "--vectors",
-        "--verbose"
+        "npx",
+        "@uworx/memori",
+        "--long"
       ]
     }
+    //"memori": {
+    //  "type": "local",
+    //  "command": [
+    //    "dotnet",
+    //    "run",
+    //    "--project",
+    //    ".\\src\\Memori.Mcp\\Memori.Mcp.csproj",
+    //    "--long",
+    //    "--vectors",
+    //    "--verbose"
+    //  ]
+    //}
   }
 }

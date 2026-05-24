@@ -1,6 +1,13 @@
 namespace Memori.Mcp;
 
-static class CliParser
+/// <summary>
+/// Parses command-line arguments and returns a tuple containing the selected MemoriMode, an optional storage path, a
+/// verbose flag, and a full-text flag.
+/// </summary>
+/// <remarks>Recognizes --mode|-m with values 'ephemeral' (default) or 'durable', --long as an alias for durable,
+/// --path|-p for the storage path, --fulltext, and --verbose|-v. Defaults: Mode = Ephemeral, StoragePath = null,
+/// Verbose = false, FullText = false. An unknown value supplied to --mode results in an ArgumentException.</remarks>
+public static class CliParser
 {
     public static (MemoriMode Mode, string? StoragePath, bool Verbose, bool FullText) Parse(string[] args)
     {

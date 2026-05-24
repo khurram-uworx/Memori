@@ -13,7 +13,7 @@ namespace Memori.Mcp.Tools;
 /// MCP tools for storing, searching, and managing durable memories directly via VectorStore.
 /// </summary>
 [McpServerToolType]
-sealed class MemoriTools
+public sealed class MemoriTools
 {
     readonly VectorStoreCollection<string, McpFactRecord> factCollection;
     readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;

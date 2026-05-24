@@ -25,7 +25,7 @@ public sealed class McpToolTests
     {
         var store = new InMemoriVectorStore();
         var facts = store.GetCollection<string, McpFactRecord>("mcp_facts");
-        var options = Options.Create(new MemoriMcpOptions { EnableVectors = true });
+        var options = Options.Create(new MemoriMcpOptions { EnableFullText = false });
         var generator = new NgramEmbeddingGenerator();
         return new MemoriTools(facts, options, generator);
     }
