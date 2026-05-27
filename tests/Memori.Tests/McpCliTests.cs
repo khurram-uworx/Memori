@@ -7,34 +7,20 @@ namespace Memori.Tests;
 public sealed class McpCliTests
 {
     [Test]
-    public void Parse_default_returns_ephemeral()
+    public void Parse_default_returns_durable()
     {
         var (mode, storagePath, verbose, enableVectors) = CliParser.Parse([]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Ephemeral));
+        Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
         Assert.That(storagePath, Is.Null);
         Assert.That(verbose, Is.False);
         Assert.That(enableVectors, Is.False);
     }
 
     [Test]
-    public void Parse_long_flag_sets_durable()
-    {
-        var (mode, _, _, _) = CliParser.Parse(["--long"]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Durable));
-    }
-
-    [Test]
     public void Parse_mode_durable_sets_durable()
     {
         var (mode, _, _, _) = CliParser.Parse(["--mode", "durable"]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Durable));
-    }
-
-    [Test]
-    public void Parse_mode_ephemeral_sets_ephemeral()
-    {
-        var (mode, _, _, _) = CliParser.Parse(["--mode", "ephemeral"]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Ephemeral));
+        Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
     }
 
     [Test]
@@ -66,15 +52,6 @@ public sealed class McpCliTests
     }
 
     [Test]
-    public void Parse_long_with_path_and_verbose()
-    {
-        var (mode, path, verbose, _) = CliParser.Parse(["--long", "--path", "/tmp/mem", "--verbose"]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Durable));
-        Assert.That(path, Is.EqualTo("/tmp/mem"));
-        Assert.That(verbose, Is.True);
-    }
-
-    [Test]
     public void Parse_unknown_mode_throws()
     {
         Assert.That(() => CliParser.Parse(["--mode", "invalid"]),
@@ -85,7 +62,7 @@ public sealed class McpCliTests
     public void Parse_mode_shortflag()
     {
         var (mode, _, _, _) = CliParser.Parse(["-m", "durable"]);
-        Assert.That(mode, Is.EqualTo(MemoriMode.Durable));
+        Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
     }
 
     [Test]
@@ -93,12 +70,5 @@ public sealed class McpCliTests
     {
         var (_, _, _, enableFullText) = CliParser.Parse(["--fulltext"]);
         Assert.That(enableFullText, Is.True);
-    }
-
-    [Test]
-    public void Parse_default_vectors_false()
-    {
-        var (_, _, _, enableVectors) = CliParser.Parse(["--long"]);
-        Assert.That(enableVectors, Is.False);
     }
 }

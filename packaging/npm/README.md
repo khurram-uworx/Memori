@@ -23,19 +23,6 @@ Configure the MCP server in your client (VS Code, Cursor, Claude Desktop, etc.) 
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long"]
-    }
-  }
-}
-```
-
-The `--long` flag enables durable (SQLite-backed) mode so memories persist across sessions. For ephemeral (in-memory) mode, omit `--long`:
-
-```json
-{
-  "mcpServers": {
-    "memori": {
-      "command": "npx",
       "args": ["-y", "@uworx/memori"]
     }
   }
@@ -49,7 +36,7 @@ To store data in a custom location, pass `--path`:
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long", "--path", "/path/to/memories"]
+      "args": ["-y", "@uworx/memori", "--path", "/path/to/memories"]
     }
   }
 }
@@ -86,10 +73,10 @@ All tools return structured JSON.
 
 ## `.memori` Folder
 
-Memori creates a `.memori/` folder in the working directory regardless of mode:
+Memori creates a `.memori/` folder in the working directory that stores:
 
-- **Always**: Stores diagnostic logs (`Log.*.txt`) — include these when reporting issues
-- **Durable mode only** (`--long`): Also stores the SQLite database (`memori.db`)
+- Diagnostic logs (`Log.*.txt`) — include these when reporting issues
+- The SQLite database (`memori.db`) with all stored memories
 
 You can safely add `.memori/` to your project's `.gitignore`.
 

@@ -3,7 +3,6 @@ using Memori.Mcp;
 using Memori.Mcp.Models;
 using Memori.Mcp.Tools;
 using Memori.Storage;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using NUnit.Framework;
 using System.Text.Json;
