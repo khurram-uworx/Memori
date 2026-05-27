@@ -1,19 +1,19 @@
 namespace Memori.Mcp;
 
 /// <summary>
-/// Defines the storage mode for Memori MCP: currently only Durable (SQLite-backed) is supported, with room for future
-/// modes (e.g. file-based).
+/// Defines the storage mode for Memori MCP.
 /// </summary>
 public enum MemoriMode
 {
-    Sqlite
+    Sqlite,
+    Markdown
 }
 
 /// <summary>
 /// Configuration options for Memori MCP that control storage mode, storage path, scope, default entity identifier, and
 /// full-text indexing.
 /// </summary>
-/// <remarks>Default values: Mode = MemoriMode.Durable, DefaultEntityId = "default", EnableFullText = false.</remarks>
+/// <remarks>Default values: Mode = MemoriMode.Sqlite, DefaultEntityId = "default", EnableFullText = false.</remarks>
 public class MemoriMcpOptions
 {
     public MemoriMode Mode { get; set; } = MemoriMode.Sqlite;

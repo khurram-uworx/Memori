@@ -15,11 +15,27 @@ The NPM package is a lightweight downloader. On first use it fetches a self-cont
 ## Usage
 
 ```bash
-# Default (SQLite-backed, persists across sessions)
+# Default — SQLite-backed, persists across sessions
 npx -y @uworx/memori
 
-# Custom path
+# Markdown mode — human-readable, git-friendly files
+npx -y @uworx/memori --markdown
+
+# Markdown mode with custom path
+npx -y @uworx/memori --mode markdown --path ./project-memories
+
+# SQLite with full-text search (FTS5) instead of n-gram vectors
+npx -y @uworx/memori --fulltext
+
+# Custom path with debug logging
 npx -y @uworx/memori --path ./my-memories --verbose
+
+# All flags:
+#   --mode, -m <sqlite|markdown>     Operation mode (default: sqlite)
+#   --markdown                       Shorthand for --mode markdown
+#   --path, -p <path>                Storage path (default per mode)
+#   --fulltext                       Enable FTS5 (sqlite mode only)
+#   --verbose, -v                    Enable debug logging
 ```
 
 ## Global dotnet tool (alternative)

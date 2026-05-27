@@ -29,6 +29,19 @@ Configure the MCP server in your client (VS Code, Cursor, Claude Desktop, etc.) 
 }
 ```
 
+To use markdown mode (human-readable, git-friendly files) instead of the default SQLite mode:
+
+```json
+{
+  "mcpServers": {
+    "memori": {
+      "command": "npx",
+      "args": ["-y", "@uworx/memori", "--markdown"]
+    }
+  }
+}
+```
+
 To store data in a custom location, pass `--path`:
 
 ```json
@@ -76,9 +89,9 @@ All tools return structured JSON.
 Memori creates a `.memori/` folder in the working directory that stores:
 
 - Diagnostic logs (`Log.*.txt`) — include these when reporting issues
-- The SQLite database (`memori.db`) with all stored memories
+- The SQLite database (`memori.db`) with all stored memories (sqlite mode)
 
-You can safely add `.memori/` to your project's `.gitignore`.
+In **markdown mode**, memories are stored as markdown files directly in the configured path (e.g., `PREFERENCES.md`, `FACTS.md`) — one line per memory, one file per type. These files are human-readable and can be checked into version control.
 
 ## Learn More
 

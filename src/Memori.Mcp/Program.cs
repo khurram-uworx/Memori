@@ -18,14 +18,17 @@ if (args is ["--help" or "-h", ..])
         Memori MCP Server v{version}
 
         Usage:
-          --mode, -m <durable>             Operation mode (default: durable)
-          --path, -p <path>                Storage path (default: .memori/)
+          --mode, -m <sqlite|markdown>     Operation mode (default: sqlite)
+          --markdown                       Shorthand for --mode markdown
+          --path, -p <path>                Storage path (default per mode)
           --fulltext                       Enable Full Text search (FTS5, default n-gram vector search)
           --verbose, -v                    Enable debug logging
           --help, -h                       Show this help
 
         Examples:
           memori-mcp
+          memori-mcp --mode markdown --path ./project-memories
+          memori-mcp --markdown --path C:\Absolute\Path
           memori-mcp --path ./my-memories --verbose
         """);
     return 0;
@@ -42,11 +45,14 @@ builder.Logging.AddProvider(new MemoriFileLoggerProvider(Environment.CurrentDire
 builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(verbose ? LogLevel.Debug : LogLevel.Information);
 
-builder.Services.AddMemoriSqliteStorage(options =>
+if (mode == MemoriMode.Sqlite)
 {
-    if (storagePath is not null)
-        options.DatabasePath = Path.Combine(storagePath, "memori.db");
-});
+    builder.Services.AddMemoriSqliteStorage(options =>
+    {
+        if (storagePath is not null)
+            options.DatabasePath = Path.Combine(storagePath, "memori.db");
+    });
+}
 
 builder.Services.AddMemoriMcp(options =>
 {

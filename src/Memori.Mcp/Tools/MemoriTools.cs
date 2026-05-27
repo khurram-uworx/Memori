@@ -1,46 +1,29 @@
 using Memori.Mcp.Models;
-using Microsoft.Extensions.AI;
+using Memori.Mcp.Storage;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.VectorData;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
-using System.Linq.Expressions;
 using System.Text.Json;
 
 namespace Memori.Mcp.Tools;
 
-/// <summary>
-/// MCP tools for storing, searching, and managing durable memories directly via VectorStore.
-/// </summary>
 [McpServerToolType]
 public sealed class MemoriTools
 {
-    readonly VectorStoreCollection<string, McpFactRecord> factCollection;
-    readonly IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator;
+    readonly IMemoryStore store;
     readonly string defaultEntityId;
     string? currentEntityId;
 
-    /// <summary>
-    /// Creates memory tools backed by the given VectorStore collection.
-    /// </summary>
     public MemoriTools(
-        VectorStoreCollection<string, McpFactRecord> factCollection,
-        IOptions<MemoriMcpOptions> options,
-        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
+        IMemoryStore store,
+        IOptions<MemoriMcpOptions> options)
     {
-        this.factCollection = factCollection ?? throw new ArgumentNullException(nameof(factCollection));
-        this.embeddingGenerator = embeddingGenerator;
+        this.store = store ?? throw new ArgumentNullException(nameof(store));
         defaultEntityId = options?.Value?.DefaultEntityId ?? "default";
     }
 
     string entityId => currentEntityId ?? defaultEntityId;
 
-    static Expression<Func<McpFactRecord, bool>> ActiveFilter(string id) =>
-        r => r.EntityId == id && !r.IsDeleted;
-
-    /// <summary>
-    /// Stores a new fact about the current entity in durable memory for future recall.
-    /// </summary>
     [McpServerTool]
     [Description("Store a new fact about the current entity in durable memory for future recall")]
     public async Task<string> Remember(
@@ -65,13 +48,7 @@ public sealed class MemoriTools
                 IsDeleted = false
             };
 
-            if (embeddingGenerator is not null)
-            {
-                var generated = await embeddingGenerator.GenerateAsync(content).ConfigureAwait(false);
-                record.Embedding = generated.Vector;
-            }
-
-            await factCollection.UpsertAsync(record).ConfigureAwait(false);
+            await store.InsertAsync(record).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new { status = "remembered", id = record.Id });
         }
@@ -81,9 +58,6 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Searches stored memories by semantic query, returning ranked results.
-    /// </summary>
     [McpServerTool]
     [Description("Search stored memories by semantic query, returning ranked results")]
     public async Task<string> Search(
@@ -92,44 +66,19 @@ public sealed class MemoriTools
     {
         try
         {
-            var searchOptions = new VectorSearchOptions<McpFactRecord>
-            {
-                Filter = ActiveFilter(entityId)
-            };
-
             var results = new List<object>();
             var resolvedLimit = limit ?? 10;
 
-            if (embeddingGenerator is not null)
+            await foreach (var (record, score) in store.SearchAsync(query, entityId, resolvedLimit).ConfigureAwait(false))
             {
-                var generated = await embeddingGenerator.GenerateAsync(query).ConfigureAwait(false);
-                await foreach (var result in factCollection.SearchAsync(
-                    generated.Vector, resolvedLimit, searchOptions).ConfigureAwait(false))
+                results.Add(new
                 {
-                    results.Add(new
-                    {
-                        id = result.Record.Id,
-                        content = result.Record.Content,
-                        score = result.Score,
-                        type = result.Record.MemoryType,
-                        createdAt = result.Record.CreatedAt
-                    });
-                }
-            }
-            else
-            {
-                await foreach (var result in factCollection.SearchAsync(
-                    query, resolvedLimit, searchOptions).ConfigureAwait(false))
-                {
-                    results.Add(new
-                    {
-                        id = result.Record.Id,
-                        content = result.Record.Content,
-                        score = result.Score,
-                        type = result.Record.MemoryType,
-                        createdAt = result.Record.CreatedAt
-                    });
-                }
+                    id = record.Id,
+                    content = record.Content,
+                    score,
+                    type = record.MemoryType,
+                    createdAt = record.CreatedAt
+                });
             }
 
             return JsonSerializer.Serialize(results);
@@ -140,9 +89,6 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Lists all memories for the current entity with optional pagination.
-    /// </summary>
     [McpServerTool]
     [Description("List all memories for the current entity with optional pagination")]
     public async Task<string> List(
@@ -151,14 +97,9 @@ public sealed class MemoriTools
     {
         try
         {
-            var filterOptions = new FilteredRecordRetrievalOptions<McpFactRecord>
-            {
-                Skip = skip ?? 0
-            };
-
             var results = new List<object>();
-            await foreach (var record in factCollection.GetAsync(
-                ActiveFilter(entityId), take ?? 50, filterOptions).ConfigureAwait(false))
+
+            await foreach (var record in store.ListAsync(entityId, skip ?? 0, take ?? 50, false).ConfigureAwait(false))
             {
                 results.Add(new
                 {
@@ -179,9 +120,6 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Gets a specific memory record by its unique identifier.
-    /// </summary>
     [McpServerTool]
     [Description("Get a specific memory record by its unique identifier")]
     public async Task<string> Get(
@@ -189,7 +127,7 @@ public sealed class MemoriTools
     {
         try
         {
-            var record = await factCollection.GetAsync(memoryId).ConfigureAwait(false);
+            var record = await store.GetAsync(memoryId).ConfigureAwait(false);
 
             if (record is null)
                 return JsonSerializer.Serialize(new { error = $"Memory '{memoryId}' not found." });
@@ -211,9 +149,6 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Updates the content of an existing memory record.
-    /// </summary>
     [McpServerTool]
     [Description("Update the content of an existing memory record")]
     public async Task<string> Update(
@@ -222,7 +157,7 @@ public sealed class MemoriTools
     {
         try
         {
-            var record = await factCollection.GetAsync(memoryId).ConfigureAwait(false);
+            var record = await store.GetAsync(memoryId).ConfigureAwait(false);
 
             if (record is null)
                 return JsonSerializer.Serialize(new { error = $"Memory '{memoryId}' not found." });
@@ -230,7 +165,7 @@ public sealed class MemoriTools
             record.Content = content;
             record.Version++;
 
-            await factCollection.UpsertAsync(record).ConfigureAwait(false);
+            await store.ReplaceAsync(record).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new { status = "updated", id = memoryId });
         }
@@ -240,9 +175,6 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Soft-deletes a memory record by its unique identifier.
-    /// </summary>
     [McpServerTool]
     [Description("Soft-delete a memory record by its unique identifier")]
     public async Task<string> Delete(
@@ -250,14 +182,10 @@ public sealed class MemoriTools
     {
         try
         {
-            var record = await factCollection.GetAsync(memoryId).ConfigureAwait(false);
+            var found = await store.DeleteAsync(memoryId, entityId).ConfigureAwait(false);
 
-            if (record is null)
+            if (!found)
                 return JsonSerializer.Serialize(new { error = $"Memory '{memoryId}' not found." });
-
-            record.IsDeleted = true;
-
-            await factCollection.UpsertAsync(record).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new { status = "deleted", id = memoryId });
         }
@@ -267,29 +195,13 @@ public sealed class MemoriTools
         }
     }
 
-    /// <summary>
-    /// Clears all memories for the current entity by soft-deleting each record.
-    /// </summary>
     [McpServerTool]
     [Description("Clear all memories for the current entity by soft-deleting each record")]
     public async Task<string> Clear()
     {
         try
         {
-            var memories = new List<McpFactRecord>();
-            await foreach (var record in factCollection.GetAsync(
-                ActiveFilter(entityId), int.MaxValue).ConfigureAwait(false))
-            {
-                memories.Add(record);
-            }
-
-            var count = 0;
-            foreach (var memory in memories)
-            {
-                memory.IsDeleted = true;
-                await factCollection.UpsertAsync(memory).ConfigureAwait(false);
-                count++;
-            }
+            var count = await store.ClearAsync(entityId).ConfigureAwait(false);
 
             return JsonSerializer.Serialize(new { status = "cleared", count });
         }

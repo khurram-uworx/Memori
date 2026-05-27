@@ -395,11 +395,21 @@ dotnet tool install -g Memori.Mcp --prerelease
 # Run the MCP server (SQLite-backed, persists across sessions)
 memori-mcp
 
+# Markdown mode — human-readable, git-friendly files
+memori-mcp --markdown
+
 # Custom storage path
 memori-mcp --path ./my-memories
 
 # Enable debug logging
 memori-mcp --verbose
+
+# All flags:
+#   --mode, -m <sqlite|markdown>     Operation mode (default: sqlite)
+#   --markdown                       Shorthand for --mode markdown
+#   --path, -p <path>                Storage path (default per mode)
+#   --fulltext                       Enable FTS5 (sqlite mode only)
+#   --verbose, -v                    Enable debug logging
 ```
 
 Or via NPM:
@@ -424,7 +434,10 @@ Once connected, the MCP server exposes these tools:
 
 ### Storage
 
-Memori uses SQLite with FTS5 for persistent, searchable storage. The database file is created at the configured path (defaults to `.memori/memori.db`).
+Memori supports two storage modes:
+
+- **Sqlite** (default) — SQLite-backed with n-gram vector search (or FTS5 via `--fulltext`). The database file is created at the configured path (defaults to `.memori/memori.db`).
+- **Markdown** — file-per-category, line-per-entry markdown files. One file per memory type (e.g., `PREFERENCES.md`) with one memory per line. Human-readable and git-friendly.
 
 ## Next Steps
 

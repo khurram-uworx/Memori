@@ -361,15 +361,17 @@ Tools are defined in `MemoryTools.cs` using the `[McpServerTool]` attribute from
 
 | Mode | Storage | Use case |
 |---|---|---|
-| **Ephemeral** | `InMemoryConversationStorage` + `InMemoryVectorStore` (SK connector) | Quick dev, no persistence needed |
-| **Durable** | `SqliteConversationStorage` + `SqliteVectorStore` with FTS5 | Repo-local persistent memory |
+| **Sqlite** (default) | `SqliteMemoryStore` — SQLite-backed `IMemoryStore` with n-gram vector search or FTS5 | Persistent memory across sessions |
+| **Markdown** | `MarkdownMemoryStore` — file-per-category, line-per-entry markdown files | Git-friendly, human-readable memory |
 
-When `--mode durable` is set, `Memori.Mcp` provides SQLite-backed storage (`Memori.Mcp.Storage` namespace) with FTS5 lexical search. The database file is created automatically at the configured path.
+When `--mode sqlite` is set (default), `Memori.Mcp` provides SQLite-backed storage (`Memori.Mcp.Storage` namespace) with n-gram vector embedding search (or FTS5 via `--fulltext`). The database file is created automatically at the configured path.
+
+When `--mode markdown` is set, memories are stored as markdown files — one file per memory type (e.g., `PREFERENCES.md`) with one memory per line. These files are human-readable and can be checked into version control.
 
 ## Extension Package Boundaries
 
 - `Memori` (core) has no first-party database dependencies.
-- `Memori.Mcp` bundles SQLite-backed `IConversationStorage` and `VectorStoreCollection` (in `Memori.Mcp.Storage`) with FTS5 search.
+- `Memori.Mcp` bundles SQLite-backed `IMemoryStore` (`SqliteMemoryStore` in `Memori.Mcp.Storage`) with n-gram vector search or FTS5, plus a markdown-file-backed `IMemoryStore` (`MarkdownMemoryStore`).
 - `Memori.Mcp` provides the MCP server layer and is published as both a NuGet library and a dotnet tool.
 - `IConversationStorage` backends and `VectorStore` providers are implemented by consuming applications or separate packages.
 - `Microsoft.Extensions.AI` and `Microsoft.Extensions.VectorData.Abstractions` are the only framework dependencies in the core package.

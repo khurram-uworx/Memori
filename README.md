@@ -69,6 +69,9 @@ Run Memori as a [Model Context Protocol](https://modelcontextprotocol.io) server
 
 ```bash
 npx -y @uworx/memori --path ./project-memories
+
+# Or use markdown mode for human-readable, git-friendly files:
+npx -y @uworx/memori --markdown
 ```
 
 Register the server in your MCP client:

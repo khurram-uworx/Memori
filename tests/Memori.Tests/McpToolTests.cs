@@ -1,6 +1,7 @@
 using Memori.Embeddings;
 using Memori.Mcp;
 using Memori.Mcp.Models;
+using Memori.Mcp.Storage;
 using Memori.Mcp.Tools;
 using Memori.Storage;
 using Microsoft.Extensions.Options;
@@ -15,18 +16,22 @@ public sealed class McpToolTests
     static MemoriTools CreateTools()
     {
         var store = new InMemoriVectorStore();
-        var facts = store.GetCollection<string, McpFactRecord>("mcp_facts");
+        var collection = store.GetCollection<string, McpFactRecord>("mcp_facts");
+        collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
+        var memoryStore = new SqliteMemoryStore(collection);
         var options = Options.Create(new MemoriMcpOptions());
-        return new MemoriTools(facts, options);
+        return new MemoriTools(memoryStore, options);
     }
 
     static MemoriTools CreateToolsWithVectors()
     {
         var store = new InMemoriVectorStore();
-        var facts = store.GetCollection<string, McpFactRecord>("mcp_facts");
-        var options = Options.Create(new MemoriMcpOptions { EnableFullText = false });
+        var collection = store.GetCollection<string, McpFactRecord>("mcp_facts");
+        collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
         var generator = new NgramEmbeddingGenerator();
-        return new MemoriTools(facts, options, generator);
+        var memoryStore = new SqliteMemoryStore(collection, generator);
+        var options = Options.Create(new MemoriMcpOptions { EnableFullText = false });
+        return new MemoriTools(memoryStore, options);
     }
 
     [Test]

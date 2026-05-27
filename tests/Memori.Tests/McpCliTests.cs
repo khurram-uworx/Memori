@@ -7,7 +7,7 @@ namespace Memori.Tests;
 public sealed class McpCliTests
 {
     [Test]
-    public void Parse_default_returns_durable()
+    public void Parse_default_returns_sqlite()
     {
         var (mode, storagePath, verbose, enableVectors) = CliParser.Parse([]);
         Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
@@ -17,10 +17,33 @@ public sealed class McpCliTests
     }
 
     [Test]
-    public void Parse_mode_durable_sets_durable()
+    public void Parse_mode_sqlite_sets_sqlite()
     {
-        var (mode, _, _, _) = CliParser.Parse(["--mode", "durable"]);
+        var (mode, _, _, _) = CliParser.Parse(["--mode", "sqlite"]);
         Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
+    }
+
+    [Test]
+    public void Parse_mode_markdown_sets_markdown()
+    {
+        var (mode, _, _, _) = CliParser.Parse(["--mode", "markdown"]);
+        Assert.That(mode, Is.EqualTo(MemoriMode.Markdown));
+    }
+
+    [Test]
+    public void Parse_markdown_shorthand_sets_markdown()
+    {
+        var (mode, _, _, _) = CliParser.Parse(["--markdown"]);
+        Assert.That(mode, Is.EqualTo(MemoriMode.Markdown));
+    }
+
+    [Test]
+    public void Parse_markdown_with_path()
+    {
+        var (mode, path, verbose, _) = CliParser.Parse(["--markdown", "--path", "./project-memories"]);
+        Assert.That(mode, Is.EqualTo(MemoriMode.Markdown));
+        Assert.That(path, Is.EqualTo("./project-memories"));
+        Assert.That(verbose, Is.False);
     }
 
     [Test]
@@ -61,7 +84,7 @@ public sealed class McpCliTests
     [Test]
     public void Parse_mode_shortflag()
     {
-        var (mode, _, _, _) = CliParser.Parse(["-m", "durable"]);
+        var (mode, _, _, _) = CliParser.Parse(["-m", "sqlite"]);
         Assert.That(mode, Is.EqualTo(MemoriMode.Sqlite));
     }
 

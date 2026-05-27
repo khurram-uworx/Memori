@@ -1,5 +1,6 @@
 using Memori.Embeddings;
 using Memori.Mcp.Models;
+using Memori.Mcp.Storage;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -9,8 +10,6 @@ namespace Memori.Mcp;
 
 static class DependencyInjection
 {
-    const string FactCollectionName = "mcp_facts";
-
     public static IServiceCollection AddMemoriMcp(
         this IServiceCollection services,
         Action<MemoriMcpOptions>? configure = null)
@@ -26,18 +25,27 @@ static class DependencyInjection
             opt.EnableFullText = options.EnableFullText;
         });
 
-        if (!options.EnableFullText)
-            services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>, NgramEmbeddingGenerator>();
+        if (options.Mode == MemoriMode.Sqlite)
+        {
+            if (!options.EnableFullText)
+                services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>, NgramEmbeddingGenerator>();
+
+            services.TryAddSingleton<IMemoryStore>(sp =>
+            {
+                var store = sp.GetRequiredService<VectorStore>();
+                var collection = store.GetCollection<string, McpFactRecord>("mcp_facts");
+                collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
+                var generator = sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>();
+                return new SqliteMemoryStore(collection, generator);
+            });
+        }
+        else
+        {
+            services.TryAddSingleton<IMemoryStore>(sp =>
+                new MarkdownMemoryStore(options.StoragePath));
+        }
 
         services.AddSingleton<MemoriMcpServer>();
-
-        services.TryAddSingleton<VectorStoreCollection<string, McpFactRecord>>(sp =>
-        {
-            var store = sp.GetRequiredService<VectorStore>();
-            var collection = store.GetCollection<string, McpFactRecord>(FactCollectionName);
-            collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
-            return collection;
-        });
 
         return services;
     }
