@@ -4,14 +4,13 @@ namespace Memori.Mcp;
 /// Parses command-line arguments and returns a tuple containing the selected MemoriMode, an optional storage path, a
 /// verbose flag, and a full-text flag.
 /// </summary>
-/// <remarks>Recognizes --mode|-m with values 'ephemeral' (default) or 'durable', --long as an alias for durable,
-/// --path|-p for the storage path, --fulltext, and --verbose|-v. Defaults: Mode = Ephemeral, StoragePath = null,
-/// Verbose = false, FullText = false. An unknown value supplied to --mode results in an ArgumentException.</remarks>
+/// <remarks>Recognizes --mode|-m with value 'durable' (default), --path|-p for the storage path, --fulltext, and
+/// --verbose|-v. Defaults: Mode = Durable, StoragePath = null, Verbose = false, FullText = false.</remarks>
 public static class CliParser
 {
     public static (MemoriMode Mode, string? StoragePath, bool Verbose, bool FullText) Parse(string[] args)
     {
-        var mode = MemoriMode.Ephemeral;
+        var mode = MemoriMode.Sqlite;
         string? storagePath = null;
         var verbose = false;
         var fullText = false;
@@ -23,13 +22,9 @@ public static class CliParser
                 case "--mode" or "-m" when i + 1 < args.Length:
                     mode = args[++i] switch
                     {
-                        "ephemeral" => MemoriMode.Ephemeral,
-                        "durable" => MemoriMode.Durable,
+                        "durable" => MemoriMode.Sqlite,
                         var v => throw new ArgumentException($"Unknown mode: {v}")
                     };
-                    break;
-                case "--long":
-                    mode = MemoriMode.Durable;
                     break;
                 case "--path" or "-p" when i + 1 < args.Length:
                     storagePath = args[++i];

@@ -15,14 +15,11 @@ The NPM package is a lightweight downloader. On first use it fetches a self-cont
 ## Usage
 
 ```bash
-# Ephemeral (in-memory)
+# Default (SQLite-backed, persists across sessions)
 npx -y @uworx/memori
 
-# Durable (SQLite)
-npx -y @uworx/memori --long
-
 # Custom path
-npx -y @uworx/memori --long --path ./my-memories --verbose
+npx -y @uworx/memori --path ./my-memories --verbose
 ```
 
 ## Global dotnet tool (alternative)
@@ -44,11 +41,6 @@ memori-mcp
 | `memori_delete` | Soft-delete a memory |
 | `memori_clear` | Clear all memories for current entity |
 
-## Modes
-
-- **Ephemeral** (default): in-memory, lost on restart
-- **Durable**: SQLite with FTS5 lexical search
-
 ## MCP Client Registration
 
 **Cursor / VS Code (Cline) / Claude Desktop:**
@@ -58,7 +50,7 @@ memori-mcp
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long"]
+      "args": ["-y", "@uworx/memori"]
     }
   }
 }

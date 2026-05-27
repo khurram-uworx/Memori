@@ -392,14 +392,11 @@ Memori ships a [Model Context Protocol](https://modelcontextprotocol.io) server 
 # Install the dotnet tool
 dotnet tool install -g Memori.Mcp --prerelease
 
-# Run in ephemeral mode (in-memory, no persistence)
+# Run the MCP server (SQLite-backed, persists across sessions)
 memori-mcp
 
-# Run in durable mode (SQLite, persists across sessions)
-memori-mcp --long
-
 # Custom storage path
-memori-mcp --long --path ./my-memories
+memori-mcp --path ./my-memories
 
 # Enable debug logging
 memori-mcp --verbose
@@ -408,7 +405,7 @@ memori-mcp --verbose
 Or via NPM:
 
 ```bash
-npx -y @uworx/memori --long
+npx -y @uworx/memori
 ```
 
 ### Available Tools
@@ -425,10 +422,9 @@ Once connected, the MCP server exposes these tools:
 | `memori_delete` | Soft-delete a memory record |
 | `memori_clear` | Clear all memories for the current entity |
 
-### Modes
+### Storage
 
-- **Ephemeral** (default): all data in memory, lost on restart. No dependencies beyond the .NET SDK.
-- **Durable**: uses SQLite with FTS5 for persistent, searchable storage. The database file is created at the configured path (defaults to `.memori/memori.db`).
+Memori uses SQLite with FTS5 for persistent, searchable storage. The database file is created at the configured path (defaults to `.memori/memori.db`).
 
 ## Next Steps
 

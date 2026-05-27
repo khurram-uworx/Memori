@@ -4,7 +4,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.VectorData;
-using SkInMemoryVectorStore = Microsoft.SemanticKernel.Connectors.InMemory.InMemoryVectorStore;
 
 namespace Memori.Mcp;
 
@@ -34,16 +33,10 @@ static class DependencyInjection
 
         services.TryAddSingleton<VectorStoreCollection<string, McpFactRecord>>(sp =>
         {
-            var store = sp.GetService<VectorStore>();
-            if (store is not null)
-            {
-                var collection = store.GetCollection<string, McpFactRecord>(FactCollectionName);
-                collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
-                return collection;
-            }
-
-            var inMemoryStore = new SkInMemoryVectorStore();
-            return inMemoryStore.GetCollection<string, McpFactRecord>(FactCollectionName);
+            var store = sp.GetRequiredService<VectorStore>();
+            var collection = store.GetCollection<string, McpFactRecord>(FactCollectionName);
+            collection.EnsureCollectionExistsAsync().GetAwaiter().GetResult();
+            return collection;
         });
 
         return services;

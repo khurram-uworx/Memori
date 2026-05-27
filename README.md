@@ -68,11 +68,7 @@ No first-party database integrations are included. Implement `IConversationStora
 Run Memori as a [Model Context Protocol](https://modelcontextprotocol.io) server to give AI coding agents durable memory:
 
 ```bash
-# Ephemeral (in-memory) mode
-npx -y @uworx/memori
-
-# Durable (SQLite) mode — persists across sessions
-npx -y @uworx/memori --long --path ./project-memories
+npx -y @uworx/memori --path ./project-memories
 ```
 
 Register the server in your MCP client:
@@ -83,7 +79,7 @@ Register the server in your MCP client:
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long"]
+      "args": ["-y", "@uworx/memori"]
     }
   }
 }
@@ -95,7 +91,7 @@ Register the server in your MCP client:
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long"]
+      "args": ["-y", "@uworx/memori"]
     }
   }
 }
@@ -107,7 +103,7 @@ Register the server in your MCP client:
   "mcpServers": {
     "memori": {
       "command": "npx",
-      "args": ["-y", "@uworx/memori", "--long"]
+      "args": ["-y", "@uworx/memori"]
     }
   }
 }
