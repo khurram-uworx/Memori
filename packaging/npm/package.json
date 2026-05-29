@@ -1,0 +1,40 @@
+{
+  "name": "@uworx/memori",
+  "version": "0.3.0",
+  "description": "Durable memory for AI coding agents — persistent, queryable semantic memory exposed via the Model Context Protocol (MCP).",
+  "bin": {
+    "memori": "bin/memori.js"
+  },
+  "scripts": {
+    "postinstall": "node download-binary.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khurram-uworx/Memori.git"
+  },
+  "keywords": [
+    "memory",
+    "ai",
+    "semantic-memory",
+    "mcp",
+    "model-context-protocol",
+    "agents",
+    "memori"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/memori.js",
+    "download-binary.js",
+    "package.json",
+    "README.md"
+  ]
+}

@@ -4,15 +4,18 @@ Memori is a lightweight library for adding durable memory to AI applications bui
 
 It gives your AI app a persistent, searchable memory layer: capture conversations, recall relevant facts, and inject context into prompts — without coupling your code to a specific database or LLM provider.
 
-## Why Memori?
+## Is Memori Right for You?
 
-- `IConversationStorage` for conversation/session/entity/process data — bring your own backend
-- `VectorStoreCollection<string, MemoryFactRecord>` for durable fact storage via any `Microsoft.Extensions.VectorData` provider
-- Built-in `InMemoryConversationStorage` and `InMemoryVectorStore` for tests, demos, and local development
-- `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` as the embedding surface
-- A `Memori` facade for attribution, session tracking, capture, recall, and augmentation in one place
-- `IChatClient` middleware that wires recall and capture into any `Microsoft.Extensions.AI`-compatible provider
-- Scope isolation, versioning, conflict resolution, thread summarization, and memory management APIs
+Memori is a good fit when:
+- Your AI app needs persistent, searchable memory across sessions
+- You're building chatbots or assistants that should remember user preferences and history
+- You want recall-augmented generation in a `Microsoft.Extensions.AI`-based pipeline
+- You need structured memory operations (list, search, edit, soft-delete, restore)
+
+Memori is **not** a good fit for:
+- Single-turn completions with no memory requirement
+- Apps where the LLM provider already manages conversation history and no cross-session recall is needed
+- Scenarios requiring first-party database integrations (bring your own storage provider)
 
 ## Installation
 
@@ -40,9 +43,7 @@ await factCollection.UpsertAsync(new MemoryFactRecord
     CreatedAt = DateTimeOffset.UtcNow
 });
 
-var search = new MemorySearchService(
-    factCollection,
-    options: new MemoriOptions { RecallRelevanceThreshold = 0.1 });
+var search = new MemorySearchService(factCollection);
 
 var results = await search.RecallAsync("user_123", "What is my favorite color?");
 var promptContext = search.FormatPromptContext(results);
@@ -51,9 +52,10 @@ Console.WriteLine(promptContext);
 
 ## The Memori Facade
 
-The `Memori` class combines attribution, session tracking, capture, recall, and augmentation into a single entry point.
+The `MemoriEngine` class combines attribution, session tracking, capture, recall, and augmentation into a single entry point.
 
 ```csharp
+using Memori;
 using Memori.Augmentation;
 using Memori.Models;
 using Memori.Storage;
@@ -62,7 +64,7 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori.Memori(
+var memori = new MemoriEngine(
     conversationStorage,
     factCollection,
     new MemoriOptions { StripSystemMessagesOnCapture = true },
@@ -144,7 +146,21 @@ IChatClient client = new ChatClientBuilder(innerClient)
     .Build(serviceProvider);
 ```
 
-By default, recalled memory is injected as a `system` message before the existing chat history. You can change the injected role, placement, or disable injection entirely while keeping capture behavior.
+By default, recalled memory is injected as a `system` message before the existing chat history. You can configure the placement and role:
+
+```csharp
+options.PromptInjectionPlacement = PromptInjectionPlacement.AfterSystemAndDeveloperMessages;
+options.PromptInjectionRole = "developer";
+```
+
+Placement options:
+- `BeforeHistory` (default): insert as first message
+- `AfterSystemAndDeveloperMessages`: insert after existing system/developer instructions
+- `AppendToRequest`: append to the end of the request
+- `MergeIntoFirstSystemMessage`: merge into an existing instruction message
+- `Disabled`: disable prompt injection while keeping capture behavior
+
+The middleware supports streaming responses with correct cancellation semantics.
 
 ## Dependency Injection
 
@@ -191,130 +207,7 @@ services.AddMemori(
     configureOptions: options => { options.RecallRelevanceThreshold = 0.2; });
 ```
 
-## Capture Policy
-
-Capture policy is applied after provider messages are converted to Memori's durable `ConversationMessage` model. You can drop roles, omit empty messages, filter by predicate, or transform messages before storage.
-
-```csharp
-services.AddMemori(options =>
-{
-    options.ExcludedCaptureRoles.Add(ConversationRoles.Tool);
-    options.DropEmptyMessagesOnCapture = true;
-    options.CaptureMessageFilter = message => message.Role != "developer";
-    options.CaptureMessageTransform = message => new ConversationMessage(
-        message.Role,
-        message.Content.Replace("secret-token", "[redacted]", StringComparison.OrdinalIgnoreCase),
-        message.Type,
-        message.CreatedAt,
-        message.Metadata);
-});
-```
-
-## Prompt Context Formatting
-
-`BuildPromptContext(...)` returns structured facts, summaries, rendering metadata, and the final rendered text. `FormatPromptContext(...)` is available when you only need the rendered string.
-
-Formatting is driven by options:
-
-- `PromptFactBullet` / `PromptSummaryBullet`
-- `PromptTimestampFormat`
-- `PromptFactsHeading` / `PromptSummariesHeading`
-- `IncludeSummariesInPrompt`
-
-## Storage
-
-Memori splits persistent storage into two concerns:
-
-### `IConversationStorage`
-
-Covers conversations, sessions, entities, processes, and messages. The built-in `InMemoryConversationStorage` is suitable for tests and local development. For production, implement `IConversationStorage` in your own package and register it through DI.
-
-```csharp
-services.AddSingleton<IConversationStorage, MyConversationStorage>();
-services.AddMemori();
-```
-
-### `VectorStoreCollection<string, MemoryFactRecord>`
-
-Covers durable fact storage with vector and lexical search. Any `VectorStore` provider works directly. The built-in `InMemoryVectorStore` is the default.
-
-For production, register your `VectorStore` provider (e.g., Azure AI Search):
-
-```csharp
-services.AddSingleton<VectorStore>(sp => new MyProductionVectorStore(endpoint, credential));
-services.AddMemori();
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full storage contract and semantics.
-
-## Embeddings
-
-Memori uses `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` directly.
-
-- `DeterministicEmbeddingGenerator`: dependency-free vectors for tests and local demos.
-- For lexical-only recall, omit embedding generator registration.
-- Production embedding providers are supplied by the consuming application.
-
-## Augmentation
-
-Augmentation turns captured conversation messages into durable memory updates (facts, semantic triples, process attributes, and conversation summaries) in the background.
-
-Included clients:
-
-- `NullAugmentationClient`: no-op, for hosts that only want capture/recall.
-- `PromptAugmentationClient`: uses an `IChatClient` to extract structured JSON output.
-
-Implement `IAugmentationClient` to use custom extraction logic. See [ARCHITECTURE.md](ARCHITECTURE.md) for the augmentation contract and mapping helpers.
-
-## Versioning and Conflict Resolution
-
-Memori tracks record versions for concurrent memory updates:
-
-```csharp
-var versioning = new VersioningService(ConflictResolutionStrategy.LastWriteWins);
-
-var existing = await factCollection.GetAsync("fact-id");
-var resolution = versioning.ResolveConflict(incoming, existing, expectedVersion: 1);
-```
-
-Three strategies are available:
-- **LastWriteWins** (default): the latest write overwrites.
-- **Merge**: conflicting content is combined.
-- **Manual**: conflicts are flagged for external review.
-
-Each record carries a `Version` integer, a `PreviousVersionId` for audit trail, and an `IsDeleted` flag for soft-delete.
-
-## Thread Summarization
-
-Generate conversation summaries using any `IChatClient`:
-
-```csharp
-var summarizer = new ChatClientThreadSummarizer(chatClient);
-
-// Initial summary
-var summary = await summarizer.SummarizeAsync(messages);
-
-// Rolling summary with previous context
-var updated = await summarizer.SummarizeAsync(newMessages, previousSummary);
-```
-
-Summaries are stored as `MemoryFactRecord` entries with `MemoryType = "summary"`.
-
-## Memory Management
-
-Inspect, search, edit, soft-delete, and restore stored memories:
-
-```csharp
-var management = serviceProvider.GetRequiredService<IMemoryManagementService>();
-
-var memories = await management.ListMemoriesAsync("entity-1");
-var results = await management.SearchMemoriesAsync("entity-1", "coffee");
-await management.SoftDeleteMemoryAsync("fact-id");
-await management.RestoreMemoryAsync("fact-id");
-await management.HardDeleteMemoryAsync("fact-id");
-```
-
-## Hero Scenario: Full Memory Lifecycle
+## Full Example: Memory Lifecycle
 
 This example shows attribution, capture, augmentation, recall, and prompt injection across two conversation turns using the `IChatClient` middleware.
 
@@ -330,12 +223,11 @@ var conversationStorage = new InMemoryConversationStorage();
 var vectorStore = new InMemoryVectorStore();
 var factCollection = vectorStore.GetCollection<string, MemoryFactRecord>("memori_facts");
 
-var memori = new Memori.Memori(
+var memori = new MemoriEngine(
     conversationStorage,
     factCollection,
     new MemoriOptions
     {
-        RecallRelevanceThreshold = 0.1,
         SessionTimeout = TimeSpan.FromMinutes(30)
     },
     augmentationClient: new PromptAugmentationClient(yourChatClient));
@@ -371,18 +263,183 @@ Console.WriteLine(turn2.Message.Text);
 
 The middleware handles recall, injection, and capture automatically on every turn. You only need to manage attribution and sessions.
 
-## When to Use
+## Advanced Features
 
-- AI apps that need persistent, searchable memory across sessions
-- Chatbots and assistants that should remember user preferences and history
-- Any `Microsoft.Extensions.AI`-based pipeline where you want recall-augmented generation
+### Capture Policy
 
-## When Not to Use
+Capture policy is applied after messages are converted to Memori's durable `ConversationMessage` model. You can drop roles, omit empty messages, filter by predicate, or transform messages before storage.
 
-- Simple single-turn completions with no memory requirement
-- Apps where the LLM provider already manages conversation history natively and no cross-session recall is needed
+```csharp
+services.AddMemori(options =>
+{
+    options.ExcludedCaptureRoles.Add(ConversationRoles.Tool);
+    options.DropEmptyMessagesOnCapture = true;
+    options.CaptureMessageFilter = message => message.Role != "developer";
+    options.CaptureMessageTransform = message => new ConversationMessage(
+        message.Role,
+        message.Content.Replace("secret-token", "[redacted]", StringComparison.OrdinalIgnoreCase),
+        message.Type,
+        message.CreatedAt,
+        message.Metadata);
+});
+```
 
-## Learn More
+### Prompt Context Formatting
 
-- [README.md](README.md): full feature surface, DI setup, and package overview
-- [ARCHITECTURE.md](ARCHITECTURE.md): design principles, storage contract, augmentation pipeline, and implementation notes
+`BuildPromptContext(...)` returns structured facts, summaries, rendering metadata, and the final rendered text. `FormatPromptContext(...)` is available when you only need the rendered string.
+
+Formatting is driven by options:
+
+- `PromptFactBullet` / `PromptSummaryBullet`
+- `PromptTimestampFormat`
+- `PromptFactsHeading` / `PromptSummariesHeading`
+- `IncludeSummariesInPrompt`
+
+### Storage
+
+Memori splits persistent storage into two concerns:
+
+**`IConversationStorage`** covers conversations, sessions, entities, processes, and messages. The built-in `InMemoryConversationStorage` is suitable for tests and local development. For production, implement `IConversationStorage` in your own package:
+
+```csharp
+services.AddSingleton<IConversationStorage, MyConversationStorage>();
+services.AddMemori();
+```
+
+**`VectorStoreCollection<string, MemoryFactRecord>`** covers durable fact storage with vector and lexical search. Any `VectorStore` provider works directly. For production, register your provider:
+
+```csharp
+services.AddSingleton<VectorStore>(sp => new MyProductionVectorStore(endpoint, credential));
+services.AddMemori();
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full storage contract and semantics.
+
+### Embeddings
+
+Memori uses `IEmbeddingGenerator<string, Embedding<float>>` from `Microsoft.Extensions.AI` directly.
+
+- `DeterministicEmbeddingGenerator`: dependency-free vectors for tests and local demos
+- `NgramEmbeddingGenerator`: Character n-gram embedding generator for demos and prototyping
+- For lexical-only recall, omit embedding generator registration
+- Production embedding providers are supplied by the consuming application
+
+### Augmentation
+
+Augmentation turns captured conversation messages into durable memory updates (facts, semantic triples, process attributes, and conversation summaries) in the background.
+
+Included clients:
+- `NullAugmentationClient`: no-op, for hosts that only want capture/recall
+- `PromptAugmentationClient`: uses an `IChatClient` to extract structured JSON output
+
+Implement `IAugmentationClient` to use custom extraction logic. See [ARCHITECTURE.md](ARCHITECTURE.md) for the augmentation contract and mapping helpers.
+
+### Versioning and Conflict Resolution
+
+Memori tracks record versions for concurrent memory updates:
+
+```csharp
+var versioning = new VersioningService(ConflictResolutionStrategy.LastWriteWins);
+
+var existing = await factCollection.GetAsync("fact-id");
+var resolution = versioning.ResolveConflict(incoming, existing, expectedVersion: 1);
+```
+
+Three strategies are available:
+- **LastWriteWins** (default): the latest write overwrites
+- **Merge**: conflicting content is combined
+- **Manual**: conflicts are flagged for external review
+
+Each record carries a `Version` integer, a `PreviousVersionId` for audit trail, and an `IsDeleted` flag for soft-delete.
+
+### Thread Summarization
+
+Generate conversation summaries using any `IChatClient`:
+
+```csharp
+var summarizer = new ChatClientThreadSummarizer(chatClient);
+
+// Initial summary
+var summary = await summarizer.SummarizeAsync(messages);
+
+// Rolling summary with previous context
+var updated = await summarizer.SummarizeAsync(newMessages, previousSummary);
+```
+
+Summaries are stored as `MemoryFactRecord` entries with `MemoryType = "summary"`.
+
+### Memory Management
+
+Inspect, search, edit, soft-delete, and restore stored memories:
+
+```csharp
+var management = serviceProvider.GetRequiredService<IMemoryManagementService>();
+
+var memories = await management.ListMemoriesAsync("entity-1");
+var results = await management.SearchMemoriesAsync("entity-1", "coffee");
+await management.SoftDeleteMemoryAsync("fact-id");
+await management.RestoreMemoryAsync("fact-id");
+await management.HardDeleteMemoryAsync("fact-id");
+```
+
+## Running as MCP Server
+
+Memori ships a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes durable memory as MCP tools for AI coding agents.
+
+### Quick Start
+
+```bash
+# Install the dotnet tool
+dotnet tool install -g Memori.Mcp --prerelease
+
+# Run the MCP server (SQLite-backed, persists across sessions)
+memori-mcp
+
+# Markdown mode — human-readable, git-friendly files
+memori-mcp --markdown
+
+# Custom storage path
+memori-mcp --path ./my-memories
+
+# Enable debug logging
+memori-mcp --verbose
+
+# All flags:
+#   --mode, -m <sqlite|markdown>     Operation mode (default: sqlite)
+#   --markdown                       Shorthand for --mode markdown
+#   --path, -p <path>                Storage path (default per mode)
+#   --fulltext                       Enable FTS5 (sqlite mode only)
+#   --verbose, -v                    Enable debug logging
+```
+
+Or via NPM:
+
+```bash
+npx -y @uworx/memori
+```
+
+### Available Tools
+
+Once connected, the MCP server exposes these tools:
+
+| Tool | Description |
+|---|---|
+| `memori_remember` | Store a fact about the current entity |
+| `memori_search` | Semantic + lexical search across stored memories |
+| `memori_list` | List all memories for the current entity (with pagination) |
+| `memori_get` | Get a single memory record by ID |
+| `memori_update` | Update an existing memory's content |
+| `memori_delete` | Soft-delete a memory record |
+| `memori_clear` | Clear all memories for the current entity |
+
+### Storage
+
+Memori supports two storage modes:
+
+- **Sqlite** (default) — SQLite-backed with n-gram vector search (or FTS5 via `--fulltext`). The database file is created at the configured path (defaults to `.memori/memori.db`).
+- **Markdown** — file-per-category, line-per-entry markdown files. One file per memory type (e.g., `PREFERENCES.md`) with one memory per line. Human-readable and git-friendly.
+
+## Next Steps
+
+- [README.md](README.md) — full feature surface, package overview, and quick taste
+- [ARCHITECTURE.md](ARCHITECTURE.md) — design principles, storage contracts, augmentation pipeline, middleware semantics, and extension points

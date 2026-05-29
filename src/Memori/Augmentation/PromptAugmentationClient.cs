@@ -128,8 +128,8 @@ public sealed class PromptAugmentationClient : IAugmentationClient
 
     const string DefaultPrompt =
         """
-        Extract durable memories from the conversation. Return JSON with these optional arrays:
-        facts, semanticTriples, processAttributes. Include conversationSummary when useful.
+        Extract durable and personalized memories from the conversation that we can store for the entity to recall later and use.
+        Return JSON with these optional arrays: facts, semanticTriples, processAttributes. Include conversationSummary when useful.
         Use only valid JSON and no markdown.
         """;
 

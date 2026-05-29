@@ -54,13 +54,9 @@ public sealed class DefaultDistributedRanker : IDistributedRanker
         var merged = new List<RecallResult>();
 
         foreach (var sourceList in sourceResults)
-        {
             foreach (var result in sourceList)
-            {
                 if (seen.Add(result.FactId))
                     merged.Add(result);
-            }
-        }
 
         return ApplyMemoryRanker(merged, now);
     }
@@ -113,9 +109,11 @@ public sealed class DefaultDistributedRanker : IDistributedRanker
             .ToList();
 
         bool hasMore;
+
         do
         {
             hasMore = false;
+
             for (int i = 0; i < iterators.Count; i++)
             {
                 if (iterators[i].MoveNext())
@@ -126,8 +124,7 @@ public sealed class DefaultDistributedRanker : IDistributedRanker
                         result.Add(current);
                 }
             }
-        }
-        while (hasMore);
+        } while (hasMore);
 
         foreach (var iterator in iterators)
             iterator.Dispose();
@@ -139,6 +136,7 @@ public sealed class DefaultDistributedRanker : IDistributedRanker
     {
         if (sourceWeights.TryGetValue(sourceName, out var weight))
             return weight;
+
         return 1.0;
     }
 
