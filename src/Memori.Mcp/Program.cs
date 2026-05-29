@@ -27,17 +27,17 @@ if (args is ["--help" or "-h", ..])
           --help, -h                       Show this help
 
         Examples:
-          memori-mcp
-          memori-mcp --mode markdown --path ./project-memories
-          memori-mcp --markdown --path C:\Absolute\Path
-          memori-mcp --path ./my-memories --debug
+          memori
+          memori --mode markdown --path ./project-memories
+          memori --markdown --path C:\Absolute\Path
+          memori --path ./my-memories --debug
         """);
     return 0;
 }
 
 if (args is ["--version", ..])
 {
-    Console.WriteLine($"memori-mcp v{version}");
+    Console.WriteLine($"Memori MCP Server v{version}");
     return 0;
 }
 

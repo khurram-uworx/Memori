@@ -58,14 +58,12 @@ No first-party database integrations are included. Implement `IConversationStora
 
 ## Packages
 
-| Package | NuGet |
-|---|---|
-| [Memori](https://www.nuget.org/packages/Memori) | [![NuGet](https://img.shields.io/nuget/v/Memori)](https://www.nuget.org/packages/Memori) |
-| [Memori.Mcp](https://www.nuget.org/packages/Memori.Mcp) | [![NuGet](https://img.shields.io/nuget/v/Memori.Mcp)](https://www.nuget.org/packages/Memori.Mcp) — MCP server + CLI tool (includes SQLite durable storage) |
+- [![NuGet](https://img.shields.io/nuget/v/Memori)](https://www.nuget.org/packages/Memori)
+- [![Npm](https://badgen.net/npm/v/@uworx/memori)](https://npmjs.com/package/@uworx/memori)
 
 ### MCP Server
 
-Run Memori as a [Model Context Protocol](https://modelcontextprotocol.io) server to give AI coding agents durable memory:
+Run Memori as a Model Context Protocol to give AI coding agents durable memory:
 
 ```bash
 npx -y @uworx/memori --path ./project-memories
@@ -128,21 +126,25 @@ dotnet test --configuration Release --verbosity normal
 
 Key external packages and version constraints:
 
-| Package | Version | Note |
-|---|---|---|
-| `Microsoft.Extensions.AI` | `10.5.2` | Latest. No constraints. |
-| `Microsoft.Extensions.AI.Abstractions` | `10.5.2` | Latest. No constraints. |
-| `Microsoft.Extensions.Configuration.Binder` | `10.0.7` | Latest. No constraints. |
-| `Microsoft.Extensions.DependencyInjection.Abstractions` | `10.0.7` | Latest. No constraints. |
-| `Microsoft.Extensions.Logging.Abstractions` | `10.0.7` | Latest. No constraints. |
-| `Microsoft.Extensions.Options` | `10.0.7` | Latest. No constraints. |
-| `Microsoft.Extensions.VectorData.Abstractions` | `10.1.0` | Pinned — `10.1.0` is the highest version compatible with `Microsoft.SemanticKernel.Connectors.SqliteVec 1.74.0-preview` at runtime. Newer `10.x` minors add members to `VectorSearchOptions<T>` (e.g. `OldFilter`) that cause `MissingMethodException` in the SK connector. Bump only when the SK connector's minimum dependency moves past `10.1.0`. |
-| `System.Numerics.Tensors` | `10.0.7` | Latest. No constraints. |
+- Microsoft.Extensions.AI
+- Microsoft.Extensions.AI.Abstractions
+- Microsoft.Extensions.Configuration.Binder
+- Microsoft.Extensions.DependencyInjection.Abstractions
+- Microsoft.Extensions.Logging.Abstractions
+- Microsoft.Extensions.Options
+- Microsoft.Extensions.VectorData.Abstractions, pinned — `10.1.0` is the highest version compatible with `Microsoft.SemanticKernel.Connectors.SqliteVec 1.74.0-preview` at runtime. Newer `10.x` minors add members to `VectorSearchOptions<T>` (e.g. `OldFilter`) that cause `MissingMethodException` in the SK connector. Bump only when the SK connector's minimum dependency moves past `10.1.0`.
+- System.Numerics.Tensors
 
 ## Learn More
 
 - [GETTING-STARTED.md](GETTING-STARTED.md) — installation, facade, middleware, DI, capture policy, storage, embeddings, augmentation, versioning, summarization, memory management
 - [ARCHITECTURE.md](ARCHITECTURE.md) — design principles, storage contracts, augmentation pipeline, recall/search model, middleware semantics, extension points
+
+Blog Posts
+
+- [Durable Memory for .NET AI Applications](https://khurram-uworx.github.io/2026/05/14/Memori.html)
+- [Memori: Storage, Recall, and the Middleware Pipeline](https://khurram-uworx.github.io/2026/05/15/Memori2.html)
+- [Memori: Enterprise Patterns and Incremental Adoption](https://khurram-uworx.github.io/2026/05/16/Memori3.html)
 
 ## Contributing
 
@@ -153,4 +155,4 @@ Key external packages and version constraints:
 
 ## License
 
-Apache-2.0
+MIT

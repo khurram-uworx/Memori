@@ -181,4 +181,4 @@ Core primitives, distributed ranking, composite collection, scope isolation, ver
 
 ## License
 
-Apache-2.0
+MIT
