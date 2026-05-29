@@ -4,6 +4,33 @@
     "microsoft-learn": {
       "type": "remote",
       "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "code-memory": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y"
+        "@uworx/code-memory"
+      ]
+    },
+    "memori": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y"
+        "@uworx/memori",
+        "--markdown"
+      ]
     }
+    //"memori": {
+    //  "type": "local",
+    //  "command": [
+    //    "dotnet",
+    //    "run",
+    //    "--project",
+    //    ".\\src\\Memori.Mcp\\Memori.Mcp.csproj",
+    //    "--markdown"
+    //  ]
+    //}
   }
 }

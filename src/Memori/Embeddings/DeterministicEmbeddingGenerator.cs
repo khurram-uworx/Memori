@@ -12,6 +12,8 @@ namespace Memori.Embeddings;
 /// </remarks>
 public sealed class DeterministicEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
 {
+    static readonly EmbeddingGeneratorMetadata Metadata = new("detrm-v1", defaultModelDimensions: 1536);
+
     /// <summary>
     /// Default vector size used by the deterministic generator.
     /// </summary>
@@ -103,9 +105,15 @@ public sealed class DeterministicEmbeddingGenerator : IEmbeddingGenerator<string
     public void Dispose()
     { }
 
+    /// <inheritdoc />
     public object? GetService(Type serviceType, object? serviceKey = null)
-        => null;
+        => serviceType == typeof(EmbeddingGeneratorMetadata)
+        ? Metadata
+        : serviceType?.IsInstanceOfType(this) == true
+            ? this
+            : null;
 
+    /// <inheritdoc />
     public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(
         IEnumerable<string> values,
         EmbeddingGenerationOptions? options = null,
