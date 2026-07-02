@@ -37,7 +37,7 @@ sealed class MemoriMcpServer
         services.AddSingleton(store);
         services.AddSingleton<IOptions<MemoriMcpOptions>>(Options.Create(options));
 
-        var serviceProvider = services.BuildServiceProvider();
+        await using var serviceProvider = services.BuildServiceProvider();
         var server = serviceProvider.GetRequiredService<McpServer>();
 
         logger.LogInformation("Memori MCP server starting");

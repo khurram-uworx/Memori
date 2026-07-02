@@ -9,7 +9,7 @@
       "type": "local",
       "command": [
         "npx",
-        "-y"
+        "-y",
         "@uworx/code-memory"
       ]
     },
@@ -17,7 +17,7 @@
       "type": "local",
       "command": [
         "npx",
-        "-y"
+        "-y",
         "@uworx/memori",
         "--markdown"
       ]
